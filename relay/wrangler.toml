@@ -7,7 +7,7 @@ compatibility_date = "2024-12-01"
 # then paste the id below.
 [[kv_namespaces]]
 binding = "FEEDBACK_RATELIMIT"
-id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+id = "3fa82a60e52a4a019bbf7863592f90d2"
 
 # Secrets are provisioned out-of-band via `wrangler secret put`:
 #   FEEDBACK_PRIVATE_KEY_PKCS8  — base64 PKCS8 RSA private key (see docs/OPERATOR_RUNBOOK.md)
