@@ -1,0 +1,14 @@
+name = "feedback-relay"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+
+# Rate-limiting KV namespace. Create with:
+#   wrangler kv namespace create FEEDBACK_RATELIMIT
+# then paste the id below.
+[[kv_namespaces]]
+binding = "FEEDBACK_RATELIMIT"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+
+# Secrets are provisioned out-of-band via `wrangler secret put`:
+#   FEEDBACK_PRIVATE_KEY_PKCS8  — base64 PKCS8 RSA private key (see docs/OPERATOR_RUNBOOK.md)
+#   PRODUCT_<UPPER_ID>          — JSON { github_repo, github_token, imgbb_key } per product

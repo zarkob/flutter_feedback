@@ -1,0 +1,17 @@
+{
+  "name": "feedback-relay",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cloudflare Worker that receives in-app feedback from the feedback_relay Flutter package and files it as a GitHub issue with an attached screenshot.",
+  "main": "src/index.js",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.0.0",
+    "typescript": "^5.7.0",
+    "wrangler": "^4.0.0"
+  }
+}

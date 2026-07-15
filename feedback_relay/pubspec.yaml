@@ -1,0 +1,26 @@
+name: feedback_relay
+description: >
+  Companion package for the `feedback` Flutter plugin. Replaces the default
+  submission path with a configurable backend relay: the user's annotated
+  screenshot and comment are POSTed to your own serverless backend (see the
+  sibling `relay/` Cloudflare Worker), which files them as a GitHub issue.
+  Product-agnostic and config-driven — no secrets ship in the app.
+version: 0.1.0
+homepage: https://uekoetter.dev/
+repository: https://github.com/zarkob/flutter_feedback
+issue_tracker: https://github.com/zarkob/flutter_feedback/issues
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+  flutter: ">=3.24.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  feedback: ^3.2.0
+  http: ^1.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0

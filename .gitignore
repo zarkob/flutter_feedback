@@ -1,2 +1,11 @@
 .DS_Store
 feedback_gitlab/pubspec.lock
+
+# Worker (relay/) dependencies and local state — never committed
+relay/node_modules/
+relay/.wrangler/
+relay/.dev.vars
+relay/dist/
+
+# Operator-held keypair & local secrets — never committed (see relay/docs/OPERATOR_RUNBOOK.md)
+relay/.dev/
