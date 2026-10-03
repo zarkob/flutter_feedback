@@ -1,0 +1,19 @@
+name: host_alpha
+description: "Host fixture A for the shared feedback tool. A small host with its own product settings."
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: ^3.10.7
+
+dependencies:
+  flutter:
+    sdk: flutter
+  feedback_relay:
+    path: ../../
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  http: ^1.0.0

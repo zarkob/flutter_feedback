@@ -1,11 +1,10 @@
 name: feedback_relay
 description: >
-  Companion package for the `feedback` Flutter plugin. Replaces the default
-  submission path with a configurable backend relay: the user's annotated
-  screenshot and comment are POSTed to your own serverless backend (see the
-  sibling `relay/` Cloudflare Worker), which files them as a GitHub issue.
-  Product-agnostic and config-driven — no secrets ship in the app.
-version: 0.1.0
+  Shared feedback tool for Avensora test builds. Quick reports with a preview
+  step, saved drafts, safe retries, honest delivery states, and one build
+  control for test inclusion and production exclusion. The relay server holds
+  every destination secret.
+version: 0.2.0
 homepage: https://uekoetter.dev/
 repository: https://github.com/zarkob/flutter_feedback
 issue_tracker: https://github.com/zarkob/flutter_feedback/issues

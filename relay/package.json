@@ -1,16 +1,19 @@
 {
   "name": "feedback-relay",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "Cloudflare Worker that receives in-app feedback from the feedback_relay Flutter package and files it as a GitHub issue with an attached screenshot.",
-  "main": "src/index.js",
+  "type": "module",
+  "description": "Feedback relay for Avensora test builds. It checks tester access and the allowed product destination, then files the report in the product backlog. Every external service is faked in local tests.",
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.test.ts",
+    "local": "node src/local_server.ts",
     "deploy": "wrangler deploy",
     "dev": "wrangler dev"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.0.0",
+    "@types/node": "^26.6.4",
     "typescript": "^5.7.0",
     "wrangler": "^4.0.0"
   }

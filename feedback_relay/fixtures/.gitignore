@@ -1,0 +1,4 @@
+# Fixture build state. Each fixture resolves the local package again.
+.dart_tool/
+build/
+pubspec.lock

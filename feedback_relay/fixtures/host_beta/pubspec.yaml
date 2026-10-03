@@ -1,0 +1,19 @@
+name: host_beta
+description: "Host fixture B for the shared feedback tool. A second host with a different product and a release-mode test build."
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: ^3.10.7
+
+dependencies:
+  flutter:
+    sdk: flutter
+  feedback_relay:
+    path: ../../
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  http: ^1.0.0
