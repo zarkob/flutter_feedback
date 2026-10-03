@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:math';
-import 'dart:typed_data';
 
 import 'package:feedback_relay/feedback_relay.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -99,10 +98,11 @@ void main() {
       expect(with_.context.sourceRevision, '9f8e7d6');
     });
 
-    test('caps are published for text and image', () {
-      expect(kMaxReportTextLength, greaterThan(1000));
+    test('the published caps agree with the relay limits', () {
+      // The relay refuses a longer text or a larger image. The app must not
+      // send a report that the relay will reject.
+      expect(kMaxReportTextLength, 10000);
       expect(kMaxScreenshotBytes, 4 * 1024 * 1024);
-      expect(Uint8List(0).isEmpty, isTrue);
     });
   });
 

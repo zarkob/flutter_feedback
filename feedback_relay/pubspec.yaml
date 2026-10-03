@@ -5,7 +5,7 @@ description: >
   control for test inclusion and production exclusion. The relay server holds
   every destination secret.
 version: 0.2.0
-homepage: https://uekoetter.dev/
+homepage: https://github.com/zarkob/flutter_feedback
 repository: https://github.com/zarkob/flutter_feedback
 issue_tracker: https://github.com/zarkob/flutter_feedback/issues
 

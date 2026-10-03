@@ -202,6 +202,51 @@ describe('tester access', () => {
     assert.equal(own.status, 200);
   });
 
+  test('a delivery check without a valid token is refused', async () => {
+    const { relay } = await harness();
+
+    const withoutToken = await relay(check('99999999-0000-4000-8000-000000000000', null));
+    const wrongToken = await relay(check('99999999-0000-4000-8000-000000000000', 'wrong-token'));
+
+    assert.equal(withoutToken.status, 403);
+    assert.equal(wrongToken.status, 403);
+  });
+
+  test('a report id of another product is refused', async () => {
+    const other = await sha256Hex('other-product-token');
+    const alpha: ProductBundle = {
+      product_id: 'alpha-notes',
+      github_repo: 'example/alpha-notes',
+      github_token: GITHUB_TOKEN,
+      testers: [{ name: 'zarko', token_sha256: await sha256Hex(TESTER_TOKEN) }],
+    };
+    const beta: ProductBundle = {
+      product_id: 'beta-tracker',
+      github_repo: 'example/beta-tracker',
+      github_token: GITHUB_TOKEN,
+      testers: [{ name: 'beta-tester', token_sha256: other }],
+    };
+    const backlog = new FakeBacklog();
+    const images = new FakeImageHost();
+    const relay = createRelay({
+      destinations: new MapDestinations([alpha, beta]),
+      backlog,
+      store: new MemoryDeliveryStore(),
+      imgbb: images,
+      disabledImages: new DisabledImageHost(),
+      limiter: new MemoryRateLimiter(1000, 60),
+    });
+
+    await relay(post(reportBody()));
+    const otherProduct = reportBody();
+    (otherProduct.context as Record<string, unknown>).product_id = 'beta-tracker';
+    const response = await relay(post(otherProduct, 'other-product-token'));
+
+    assert.equal(response.status, 409);
+    assert.match(await response.text(), /belongs to another product/);
+    assert.equal(backlog.issues.length, 1);
+  });
+
   test('a product without a tester entry is refused at setup', async () => {
     const destinations = new MapDestinations([]);
     assert.throws(

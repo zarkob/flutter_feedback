@@ -6,15 +6,38 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'support/relay_fakes.dart';
 
+/// Host facts for the widget checks, so the preview can be checked against
+/// known values instead of `Unknown`.
+class _FactsSource implements FeedbackContextSource {
+  const _FactsSource();
+
+  @override
+  String get appVersion => '1.2.4';
+
+  @override
+  String get buildNumber => '77';
+
+  @override
+  String get screen => 'notes_list';
+
+  @override
+  String get sourceRevision => kUnknownFact;
+
+  @override
+  DeviceFacts get device => const DeviceFacts(model: 'Pixel 7', platform: 'android', osVersion: 'Android 15', locale: 'en_US');
+}
+
 Widget _app({
   required FeedbackBuildSpec spec,
   required DraftStore store,
   RelayClient? client,
+  FeedbackContextSource contextSource = const UnknownContextSource(),
 }) {
   return FeedbackHost(
     spec: spec,
     store: store,
     client: client,
+    contextSource: contextSource,
     child: MaterialApp(
       home: Scaffold(
         body: Column(
@@ -81,9 +104,9 @@ void main() {
   });
 
   group('preview and send flow', () {
-    testWidgets('the preview shows the text and the known facts', (tester) async {
+    testWidgets('the preview shows the text, the screen, and the device facts', (tester) async {
       final store = MemoryDraftStore();
-      await tester.pumpWidget(_app(spec: testSpec(), store: store));
+      await tester.pumpWidget(_app(spec: testSpec(), store: store, contextSource: const _FactsSource()));
       await _enterFeedback(tester);
 
       await _submitFromCapture(tester, text: 'The list is empty.');
@@ -91,6 +114,19 @@ void main() {
       expect(find.text('Review this report'), findsOneWidget);
       expect(find.text('The list is empty.'), findsOneWidget);
       expect(find.text('alpha-notes'), findsOneWidget);
+      expect(find.text('notes_list'), findsOneWidget);
+      expect(find.text('Pixel 7'), findsOneWidget);
+      expect(find.text('1.2.4'), findsOneWidget);
+    });
+
+    testWidgets('the preview keeps an unknown fact honest', (tester) async {
+      final store = MemoryDraftStore();
+      await tester.pumpWidget(_app(spec: testSpec(), store: store));
+      await _enterFeedback(tester);
+
+      await _submitFromCapture(tester, text: 'No facts are known.');
+
+      expect(find.text('Unknown'), findsWidgets);
       expect(find.text('notes_list'), findsNothing);
     });
 

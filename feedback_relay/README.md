@@ -165,11 +165,11 @@ produce it.
   "steps": "1. Add one item\n2. Restart the app",
   "screenshot_b64": null,
   "context": {
-    "product_id": "ohridskiprolog2",
+    "product_id": "example-product",
     "app_version": "1.2.4",
     "build_number": "77",
     "build_mode": "test",
-    "screen": "today_schedule",
+    "screen": "main_screen",
     "source_revision": "Unknown",
     "captured_at": "2026-10-03T10:00:00.000Z",
     "device": {"model": "Pixel 7", "platform": "android", "os_version": "Android 15", "locale": "en_US"}

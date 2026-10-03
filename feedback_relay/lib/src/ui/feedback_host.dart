@@ -41,12 +41,13 @@ class FeedbackScope extends InheritedNotifier<FeedbackFlow> {
 class FeedbackHost extends StatefulWidget {
   /// Creates a host wrapper.
   ///
-  /// Supply [store] and, when the host can read the facts, [contextSource].
-  /// Supply [client] in tests to keep the network out.
+  /// [store] is required, so a host cannot lose a draft by accident. Use a
+  /// `FileDraftStore` on a private app directory, or `MemoryDraftStore` when
+  /// the host accepts that drafts do not survive a restart.
   const FeedbackHost({
     required this.spec,
+    required this.store,
     required this.child,
-    this.store,
     this.contextSource = const UnknownContextSource(),
     this.client,
     super.key,
@@ -64,8 +65,8 @@ class FeedbackHost extends StatefulWidget {
   /// The app below the wrapper.
   final Widget child;
 
-  /// The draft store. A memory store is used when the host gives none.
-  final DraftStore? store;
+  /// The draft store. It holds the drafts in private storage.
+  final DraftStore store;
 
   /// The host facts for each report.
   final FeedbackContextSource contextSource;
@@ -104,7 +105,7 @@ class _FeedbackHostState extends State<FeedbackHost> {
     super.initState();
     _flow = FeedbackFlow(
       spec: widget.spec,
-      store: widget.store ?? MemoryDraftStore(),
+      store: widget.store,
       contextSource: widget.contextSource,
       client: widget.client,
     );

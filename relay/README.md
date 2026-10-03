@@ -44,6 +44,22 @@ A lost answer is recovered by the report marker in the issue body
 a new issue. A late index keeps the state `unknown` instead of filing a second
 issue.
 
+## Known limit before a wider tester group
+
+The Cloudflare KV claim has no compare-and-swap. Two sends of one report id
+that arrive at the same moment can both pass the claim and both miss the
+backlog search. The app lowers this risk: one send runs at a time, and a retry
+checks delivery first. The local server serializes the claim, so its checks
+cannot show this window.
+
+Before a wider tester group, the claim needs one of these:
+
+- a Durable Object that owns the claim for one report id, or
+- a KV lock write with a nonce and a read-back check.
+
+The first live trial can keep the current claim. Record the limit in the trial
+result.
+
 ## Endpoints
 
 `POST /reports` — send one report. Header `X-Tester-Token` is required.
@@ -58,11 +74,11 @@ issue.
   "steps": "1. Add one item\n2. Restart the app",
   "screenshot_b64": null,
   "context": {
-    "product_id": "ohridskiprolog2",
+    "product_id": "example-product",
     "app_version": "1.2.4",
     "build_number": "77",
     "build_mode": "test",
-    "screen": "today_schedule",
+    "screen": "main_screen",
     "source_revision": "Unknown",
     "captured_at": "2026-10-03T10:00:00.000Z",
     "device": {"model": "Pixel 7", "platform": "android", "os_version": "Android 15", "locale": "en_US"}

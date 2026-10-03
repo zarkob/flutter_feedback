@@ -63,6 +63,11 @@ export function createRelay(deps: RelayDeps): RelayHandler {
     }
 
     const existing = await deps.store.get(report.report_id);
+    if (existing && existing.product_id !== bundle.product_id) {
+      // One report id belongs to one product. A colliding id is refused.
+      log('product_conflict', { product: bundle.product_id, report: report.report_id });
+      return json({ ok: false, error: 'This report id belongs to another product.' }, 409);
+    }
     if (existing && existing.status === 'created' && existing.issue_url) {
       log('duplicate', { product: bundle.product_id, report: report.report_id });
       return json({ ok: true, status: 'duplicate', issue_url: existing.issue_url }, 200);
@@ -149,6 +154,10 @@ export function createRelay(deps: RelayDeps): RelayHandler {
   async function handleCheck(reportId: string, token: string | null): Promise<Response> {
     const record = await deps.store.get(reportId);
     if (!record) {
+      // A missing record must not become a way to probe report ids.
+      if (!(await hasAnyAccess(deps.destinations, token))) {
+        return json({ ok: false, error: 'Tester access denied.' }, 403);
+      }
       return json({ ok: true, status: 'not_found' }, 200);
     }
     const bundle = deps.destinations.resolve(record.product_id);
@@ -197,6 +206,18 @@ export function createRelay(deps: RelayDeps): RelayHandler {
       return json({ ok: false, error: 'Internal error.' }, 500);
     }
   };
+}
+
+async function hasAnyAccess(destinations: DestinationMap, token: string | null): Promise<boolean> {
+  if (!token) {
+    return false;
+  }
+  for (const bundle of destinations.all()) {
+    if (await hasTesterAccess(bundle, token)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 async function safeFind(backlog: Backlog, bundle: ProductBundle, reportId: string) {

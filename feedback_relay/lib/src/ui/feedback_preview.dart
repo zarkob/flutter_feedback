@@ -29,7 +29,8 @@ class FeedbackPreviewSheet extends StatelessWidget {
   final FeedbackReport report;
 
   /// Opens the preview and returns the tester's choice, or null when it closes.
-  static Future<FeedbackPreviewAction?> show(BuildContext context, FeedbackReport report) {
+  static Future<FeedbackPreviewAction?> show(
+      BuildContext context, FeedbackReport report) {
     return showModalBottomSheet<FeedbackPreviewAction>(
       context: context,
       isScrollControlled: true,
@@ -70,60 +71,75 @@ class FeedbackPreviewSheet extends StatelessWidget {
             Text('Report ID ${report.id}', style: theme.textTheme.bodySmall),
             const SizedBox(height: 12),
             Expanded(
-              child: ListView(
+              child: SingleChildScrollView(
                 controller: controller,
-                children: <Widget>[
-                  _section(context, 'What happened', report.text),
-                  if (report.expected != null) _section(context, 'Expected', report.expected!),
-                  if (report.steps != null) _section(context, 'Steps', report.steps!),
-                  if (report.hasScreenshot) ...<Widget>[
-                    Text('Image', style: theme.textTheme.labelLarge),
-                    const SizedBox(height: 6),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.memory(
-                        report.screenshot!,
-                        height: 180,
-                        fit: BoxFit.contain,
-                        errorBuilder: (context, error, stack) => const Text('The image cannot be shown.'),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    _section(context, 'What happened', report.text),
+                    if (report.expected != null)
+                      _section(context, 'Expected', report.expected!),
+                    if (report.steps != null)
+                      _section(context, 'Steps', report.steps!),
+                    if (report.hasScreenshot) ...<Widget>[
+                      Text('Image', style: theme.textTheme.labelLarge),
+                      const SizedBox(height: 6),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.memory(
+                          report.screenshot!,
+                          height: 180,
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stack) =>
+                              const Text('The image cannot be shown.'),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
+                      const SizedBox(height: 12),
+                    ],
+                    Text('Build and device facts',
+                        style: theme.textTheme.labelLarge),
+                    const SizedBox(height: 4),
+                    for (final entry in facts.entries)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            SizedBox(
+                                width: 120,
+                                child: Text(entry.key,
+                                    style: theme.textTheme.bodySmall)),
+                            Expanded(
+                                child: Text(entry.value,
+                                    style: theme.textTheme.bodySmall)),
+                          ],
+                        ),
+                      ),
                   ],
-                  Text('Build and device facts', style: theme.textTheme.labelLarge),
-                  const SizedBox(height: 4),
-                  for (final entry in facts.entries)
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          SizedBox(width: 120, child: Text(entry.key, style: theme.textTheme.bodySmall)),
-                          Expanded(child: Text(entry.value, style: theme.textTheme.bodySmall)),
-                        ],
-                      ),
-                    ),
-                ],
+                ),
               ),
             ),
             const SizedBox(height: 8),
             FilledButton.icon(
               key: const Key('feedback_preview_send'),
-              onPressed: () => Navigator.of(context).pop(FeedbackPreviewAction.send),
+              onPressed: () =>
+                  Navigator.of(context).pop(FeedbackPreviewAction.send),
               icon: const Icon(Icons.send_outlined),
               label: const Text('Send'),
             ),
             const SizedBox(height: 6),
             OutlinedButton.icon(
               key: const Key('feedback_preview_keep'),
-              onPressed: () => Navigator.of(context).pop(FeedbackPreviewAction.keepDraft),
+              onPressed: () =>
+                  Navigator.of(context).pop(FeedbackPreviewAction.keepDraft),
               icon: const Icon(Icons.save_outlined),
               label: const Text('Keep as draft'),
             ),
             const SizedBox(height: 6),
             TextButton(
               key: const Key('feedback_preview_cancel'),
-              onPressed: () => Navigator.of(context).pop(FeedbackPreviewAction.cancel),
+              onPressed: () =>
+                  Navigator.of(context).pop(FeedbackPreviewAction.cancel),
               child: const Text('Cancel'),
             ),
           ],

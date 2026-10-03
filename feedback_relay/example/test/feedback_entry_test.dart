@@ -9,9 +9,10 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 /// The example product with the feedback tool, as the test entry builds it.
+///
+/// The host facts come from the same source class that the test entry uses.
 Widget exampleWithFeedback({
   required DraftStore store,
-  required FeedbackContextSource contextSource,
   http.Client? client,
   void Function(String name)? onScreenChanged,
 }) {
@@ -81,7 +82,7 @@ Future<void> tapSheet(WidgetTester tester, Key key) async {
 void main() {
   testWidgets('the product works and carries one feedback entry', (tester) async {
     final store = MemoryDraftStore();
-    await tester.pumpWidget(exampleWithFeedback(store: store, contextSource: const UnknownContextSource()));
+    await tester.pumpWidget(exampleWithFeedback(store: store));
 
     expect(find.text('Example product'), findsOneWidget);
     expect(find.byKey(const Key('feedback_entry_button')), findsOneWidget);
@@ -93,7 +94,7 @@ void main() {
 
   testWidgets('a kept report names the open screen', (tester) async {
     final store = MemoryDraftStore();
-    await tester.pumpWidget(exampleWithFeedback(store: store, contextSource: const UnknownContextSource()));
+    await tester.pumpWidget(exampleWithFeedback(store: store));
 
     await enterFeedback(tester);
     await submitFromCapture(tester, 'The count is wrong.');
@@ -122,7 +123,7 @@ void main() {
       bodies.add(jsonDecode(request.body) as Map<String, dynamic>);
       return http.Response(jsonEncode(<String, dynamic>{'ok': true, 'status': 'created', 'issue_url': 'https://github.com/example/issues/5'}), 201);
     });
-    await tester.pumpWidget(exampleWithFeedback(store: store, contextSource: const UnknownContextSource(), client: client));
+    await tester.pumpWidget(exampleWithFeedback(store: store, client: client));
 
     await enterFeedback(tester);
     await submitFromCapture(tester, 'Send me.');

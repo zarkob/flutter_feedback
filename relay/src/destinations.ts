@@ -24,6 +24,8 @@ export interface ProductBundle {
 /** Reads the destination of one product id. */
 export interface DestinationMap {
   resolve(productId: string): ProductBundle | null;
+  /** Every configured destination. */
+  all(): ProductBundle[];
 }
 
 const REPO = /^[A-Za-z0-9][A-Za-z0-9_.-]*\/[A-Za-z0-9][A-Za-z0-9_.-]*$/;
@@ -47,6 +49,10 @@ export class MapDestinations implements DestinationMap {
 
   resolve(productId: string): ProductBundle | null {
     return this.byId.get(productId) ?? null;
+  }
+
+  all(): ProductBundle[] {
+    return [...this.byId.values()];
   }
 }
 
