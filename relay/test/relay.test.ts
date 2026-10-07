@@ -78,6 +78,14 @@ function post(body: unknown, token: string | null = TESTER_TOKEN): Request {
   return new Request('https://relay.test/reports', { method: 'POST', headers, body: JSON.stringify(body) });
 }
 
+function get(path: string, token: string | null = TESTER_TOKEN): Request {
+  const headers = new Headers();
+  if (token) {
+    headers.set('X-Tester-Token', token);
+  }
+  return new Request(`https://relay.test${path}`, { method: 'GET', headers });
+}
+
 function check(reportId: string, token: string | null = TESTER_TOKEN): Request {
   const headers = new Headers();
   if (token) {
@@ -326,14 +334,57 @@ describe('delivery results', () => {
   });
 
   test('a product without an image host still files the report and says so', async () => {
-    const { relay, backlog } = await harness({ imageHost: false });
+    const { relay, backlog, store } = await harness({ imageHost: false });
 
     const response = await relay(post(reportBody({ screenshot_b64: 'AA==' })));
     const body = (await response.json()) as Record<string, unknown>;
+    const note = 'The image was not stored, because this product has no image host yet.';
 
     assert.equal(response.status, 201);
-    assert.match(String(body.note), /no image host/);
+    assert.equal(body.note, note);
+    assert.equal(store.all()[0].note, note);
     assert.match(backlog.issues[0].body, /_No image was attached\._/);
+
+    const checked = await relay(get('/reports/11111111-2222-4333-8444-555555555555'));
+    const checkedBody = (await checked.json()) as Record<string, unknown>;
+    assert.equal(checkedBody.note, note);
+  });
+
+  test('keeps the missing-image note through an unknown result and later recovery', async () => {
+    const { relay, backlog, store } = await harness({ imageHost: false });
+    const note = 'The image was not stored, because this product has no image host yet.';
+    backlog.createMode = 'create_then_error';
+    backlog.searchMode = 'error';
+
+    const first = await relay(post(reportBody({ screenshot_b64: 'AA==' })));
+    const firstBody = (await first.json()) as Record<string, unknown>;
+    assert.equal(first.status, 502);
+    assert.equal(firstBody.delivery, 'unknown');
+    assert.equal(store.all()[0].note, note);
+    assert.equal(backlog.issues.length, 1);
+    assert.match(backlog.issues[0].body, /_No image was attached\._/);
+
+    const stillUnknown = await relay(check('11111111-2222-4333-8444-555555555555'));
+    const stillUnknownBody = (await stillUnknown.json()) as Record<string, unknown>;
+    assert.equal(stillUnknownBody.status, 'unknown');
+    assert.equal(stillUnknownBody.note, note);
+    assert.equal(store.all()[0].note, note);
+
+    backlog.searchMode = 'ok';
+    const recovered = await relay(check('11111111-2222-4333-8444-555555555555'));
+    const recoveredBody = (await recovered.json()) as Record<string, unknown>;
+    assert.equal(recoveredBody.status, 'created');
+    assert.equal(recoveredBody.note, note);
+    assert.equal(store.all()[0].note, note);
+
+    const checkedAgain = await relay(check('11111111-2222-4333-8444-555555555555'));
+    assert.equal(((await checkedAgain.json()) as Record<string, unknown>).note, note);
+
+    const repeated = await relay(post(reportBody({ screenshot_b64: 'AA==' })));
+    const repeatedBody = (await repeated.json()) as Record<string, unknown>;
+    assert.equal(repeatedBody.status, 'duplicate');
+    assert.equal(repeatedBody.note, note);
+    assert.equal(backlog.issues.length, 1);
   });
 
   test('an unknown issue result stays unknown and keeps the app out of a blind retry', async () => {

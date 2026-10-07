@@ -1,3 +1,9 @@
+## 0.2.1
+
+- Keep a relay note with a confirmed delivery. The draft list shows when the
+  relay did not store an image, including after a delivery check or app restart.
+- Keep existing `DeliveryConfirmed` constructor calls valid.
+
 ## 0.2.0
 
 Shared feedback tool for Avensora test builds. This version reworks the

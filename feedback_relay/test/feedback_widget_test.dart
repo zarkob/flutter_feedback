@@ -24,7 +24,11 @@ class _FactsSource implements FeedbackContextSource {
   String get sourceRevision => kUnknownFact;
 
   @override
-  DeviceFacts get device => const DeviceFacts(model: 'Pixel 7', platform: 'android', osVersion: 'Android 15', locale: 'en_US');
+  DeviceFacts get device => const DeviceFacts(
+      model: 'Pixel 7',
+      platform: 'android',
+      osVersion: 'Android 15',
+      locale: 'en_US');
 }
 
 Widget _app({
@@ -61,10 +65,13 @@ Future<void> _enterFeedback(WidgetTester tester) async {
 }
 
 /// Hands one submitted report to the flow, as the capture UI does.
-Future<void> _submitFromCapture(WidgetTester tester, {String text = 'The list is empty.', Uint8List? screenshot}) async {
-  final context = tester.element(find.byKey(const Key('feedback_entry_button')));
+Future<void> _submitFromCapture(WidgetTester tester,
+    {String text = 'The list is empty.', Uint8List? screenshot}) async {
+  final context =
+      tester.element(find.byKey(const Key('feedback_entry_button')));
   final controller = BetterFeedback.of(context);
-  controller.onFeedback!(UserFeedback(text: text, screenshot: screenshot ?? Uint8List(0)));
+  controller.onFeedback!(
+      UserFeedback(text: text, screenshot: screenshot ?? Uint8List(0)));
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 400));
 }
@@ -80,33 +87,41 @@ void main() {
   const production = FeedbackBuildSpec.production();
 
   group('build boundary in the widget tree', () {
-    testWidgets('a production build shows no wrapper and no entry control', (tester) async {
-      await tester.pumpWidget(_app(spec: production, store: MemoryDraftStore()));
+    testWidgets('a production build shows no wrapper and no entry control',
+        (tester) async {
+      await tester
+          .pumpWidget(_app(spec: production, store: MemoryDraftStore()));
 
       expect(find.byType(BetterFeedback), findsNothing);
       expect(find.byKey(const Key('feedback_entry_button')), findsNothing);
       expect(find.text('Send feedback'), findsNothing);
     });
 
-    testWidgets('a test build in release mode still shows the entry control', (tester) async {
-      await tester.pumpWidget(_app(spec: testSpec(), store: MemoryDraftStore()));
+    testWidgets('a test build in release mode still shows the entry control',
+        (tester) async {
+      await tester
+          .pumpWidget(_app(spec: testSpec(), store: MemoryDraftStore()));
       await tester.pump();
 
       expect(find.byType(BetterFeedback), findsOneWidget);
       expect(find.byKey(const Key('feedback_entry_button')), findsOneWidget);
     });
 
-    testWidgets('the entry control does nothing without a host', (tester) async {
-      await tester.pumpWidget(const MaterialApp(home: Scaffold(body: FeedbackEntryButton())));
+    testWidgets('the entry control does nothing without a host',
+        (tester) async {
+      await tester.pumpWidget(
+          const MaterialApp(home: Scaffold(body: FeedbackEntryButton())));
 
       expect(find.byKey(const Key('feedback_entry_button')), findsNothing);
     });
   });
 
   group('preview and send flow', () {
-    testWidgets('the preview shows the text, the screen, and the device facts', (tester) async {
+    testWidgets('the preview shows the text, the screen, and the device facts',
+        (tester) async {
       final store = MemoryDraftStore();
-      await tester.pumpWidget(_app(spec: testSpec(), store: store, contextSource: const _FactsSource()));
+      await tester.pumpWidget(_app(
+          spec: testSpec(), store: store, contextSource: const _FactsSource()));
       await _enterFeedback(tester);
 
       await _submitFromCapture(tester, text: 'The list is empty.');
@@ -131,26 +146,37 @@ void main() {
     });
 
     testWidgets('cancel keeps no draft and sends nothing', (tester) async {
-      final relay = FakeRelay((request) async => createdResponse('https://github.com/o/r/issues/1'));
+      final relay = FakeRelay((request) async =>
+          createdResponse('https://github.com/o/r/issues/1'));
       final store = MemoryDraftStore();
-      await tester.pumpWidget(_app(spec: testSpec(), store: store, client: RelayClient(spec: testSpec(), httpClient: relay.client)));
+      await tester.pumpWidget(_app(
+          spec: testSpec(),
+          store: store,
+          client: RelayClient(spec: testSpec(), httpClient: relay.client)));
       await _enterFeedback(tester);
       await _submitFromCapture(tester);
 
-      await _tapAndSettleSheet(tester, find.byKey(const Key('feedback_preview_cancel')));
+      await _tapAndSettleSheet(
+          tester, find.byKey(const Key('feedback_preview_cancel')));
 
       expect(await store.list(), isEmpty);
       expect(relay.requests, isEmpty);
     });
 
-    testWidgets('keep as draft saves the report without a send', (tester) async {
-      final relay = FakeRelay((request) async => createdResponse('https://github.com/o/r/issues/1'));
+    testWidgets('keep as draft saves the report without a send',
+        (tester) async {
+      final relay = FakeRelay((request) async =>
+          createdResponse('https://github.com/o/r/issues/1'));
       final store = MemoryDraftStore();
-      await tester.pumpWidget(_app(spec: testSpec(), store: store, client: RelayClient(spec: testSpec(), httpClient: relay.client)));
+      await tester.pumpWidget(_app(
+          spec: testSpec(),
+          store: store,
+          client: RelayClient(spec: testSpec(), httpClient: relay.client)));
       await _enterFeedback(tester);
       await _submitFromCapture(tester, text: 'Keep this note.');
 
-      await _tapAndSettleSheet(tester, find.byKey(const Key('feedback_preview_keep')));
+      await _tapAndSettleSheet(
+          tester, find.byKey(const Key('feedback_preview_keep')));
 
       final drafts = await store.list();
       expect(drafts.single.report.text, 'Keep this note.');
@@ -159,29 +185,43 @@ void main() {
       expect(find.text('Saved'), findsOneWidget);
     });
 
-    testWidgets('send reports the confirmed state with the issue link', (tester) async {
-      final relay = FakeRelay((request) async => createdResponse('https://github.com/o/r/issues/42'));
+    testWidgets('send reports the confirmed state with the issue link',
+        (tester) async {
+      const note = 'The image was not stored.';
+      final relay = FakeRelay((request) async =>
+          createdResponse('https://github.com/o/r/issues/42', note: note));
       final store = MemoryDraftStore();
-      await tester.pumpWidget(_app(spec: testSpec(), store: store, client: RelayClient(spec: testSpec(), httpClient: relay.client)));
+      await tester.pumpWidget(_app(
+          spec: testSpec(),
+          store: store,
+          client: RelayClient(spec: testSpec(), httpClient: relay.client)));
       await _enterFeedback(tester);
       await _submitFromCapture(tester, text: 'Send this note.');
 
-      await _tapAndSettleSheet(tester, find.byKey(const Key('feedback_preview_send')));
+      await _tapAndSettleSheet(
+          tester, find.byKey(const Key('feedback_preview_send')));
 
       expect(relay.postCount, 1);
-      expect((await store.list()).single.issueUrl, 'https://github.com/o/r/issues/42');
+      expect((await store.list()).single.issueUrl,
+          'https://github.com/o/r/issues/42');
       expect(find.text('Sent'), findsOneWidget);
       expect(find.text('https://github.com/o/r/issues/42'), findsOneWidget);
+      expect(find.text(note), findsOneWidget);
     });
 
-    testWidgets('a failed send keeps the draft and shows needs a check', (tester) async {
+    testWidgets('a failed send keeps the draft and shows needs a check',
+        (tester) async {
       final relay = FakeRelay((request) async => throw Exception('offline'));
       final store = MemoryDraftStore();
-      await tester.pumpWidget(_app(spec: testSpec(), store: store, client: RelayClient(spec: testSpec(), httpClient: relay.client)));
+      await tester.pumpWidget(_app(
+          spec: testSpec(),
+          store: store,
+          client: RelayClient(spec: testSpec(), httpClient: relay.client)));
       await _enterFeedback(tester);
       await _submitFromCapture(tester, text: 'Offline note.');
 
-      await _tapAndSettleSheet(tester, find.byKey(const Key('feedback_preview_send')));
+      await _tapAndSettleSheet(
+          tester, find.byKey(const Key('feedback_preview_send')));
 
       expect(find.text('Needs a check'), findsOneWidget);
       expect((await store.list()).single.report.text, 'Offline note.');
@@ -206,11 +246,18 @@ void main() {
     });
 
     testWidgets('a needs-check draft offers a delivery check', (tester) async {
-      final relay = FakeRelay((request) async => checkResponse('created', issueUrl: 'https://github.com/o/r/issues/11'));
+      final relay = FakeRelay((request) async => checkResponse('created',
+          issueUrl: 'https://github.com/o/r/issues/11'));
       final store = MemoryDraftStore();
       final report = sampleReport(text: 'Check me.');
-      await store.save(ReportDraft(report: report, state: ReportDeliveryState.needsCheck, note: 'No answer yet.'));
-      await tester.pumpWidget(_app(spec: testSpec(), store: store, client: RelayClient(spec: testSpec(), httpClient: relay.client)));
+      await store.save(ReportDraft(
+          report: report,
+          state: ReportDeliveryState.needsCheck,
+          note: 'No answer yet.'));
+      await tester.pumpWidget(_app(
+          spec: testSpec(),
+          store: store,
+          client: RelayClient(spec: testSpec(), httpClient: relay.client)));
       await tester.pump();
 
       await tester.tap(find.byKey(Key('draft_check_${report.id}')));
@@ -220,8 +267,10 @@ void main() {
       expect(find.text('Sent'), findsOneWidget);
     });
 
-    testWidgets('the draft list keeps a production build free of controls', (tester) async {
-      await tester.pumpWidget(_app(spec: production, store: MemoryDraftStore()));
+    testWidgets('the draft list keeps a production build free of controls',
+        (tester) async {
+      await tester
+          .pumpWidget(_app(spec: production, store: MemoryDraftStore()));
 
       expect(find.text('No saved reports.'), findsOneWidget);
     });

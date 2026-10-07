@@ -1,114 +1,174 @@
-# Operator Runbook — Feedback Relay
+# Operator runbook for the OP2 test relay
 
-This runbook tells the operator how to set up the relay, add one product, make
-one tester token, and rotate a credential.
+Use this runbook for the new Ohridski Prolog test relay.
+The checked config is `wrangler.op2-test.jsonc`.
+It has its own worker and `FEEDBACK_STORE` namespace.
+It keeps the older `feedback-relay` worker and its clients separate.
 
-The relay stays product-agnostic. One product is one destination and one tester
-list.
+Do not use `wrangler.toml` for the OP2 test relay.
+Do not change the old worker secrets.
+Do not put secret values in source files or build logs.
 
-## What the relay needs
+## Required access
 
-- The `wrangler` CLI, signed in (`wrangler login`).
-- `node` 22 or newer for the local checks.
-- One GitHub token with issue write access on the product repository.
-- One tester token per tester, made by the operator.
+- Use Node 22 or newer and the local `wrangler` package.
+- Sign in to the Cloudflare account that owns the OP2 test config.
+- Use a fine-grained GitHub token for `zarkob/ohridskiprolog2` only.
+- Give that token `Issues: Read and write` permission.
+- Do not give the token `Contents`, `Actions`, or organization permissions.
+- The relay searches issues and creates one issue for each confirmed report.
+- Make one relay tester token for each tester.
 
-## 1. Create the store
+The relay stores the tester token hash, not the token.
+A hash is a one-way value that the relay uses to check a token.
+Keep each raw tester token private.
 
-The relay keeps delivery records and rate-limit counters in one KV namespace.
+## 1. Check local files
 
-```bash
-cd relay
-wrangler kv namespace create FEEDBACK_STORE
-# Paste the returned id into wrangler.toml.
-```
-
-## 2. Add one product
-
-A product lives in one secret named `PRODUCT_<UPPER_ID>`. The id is the public
-product id in upper case, with dashes replaced by underscores. The product
-`ohridskiprolog2` uses `PRODUCT_OHRIDSKIPROLOG2`.
+Run these commands from `relay/`:
 
 ```bash
-wrangler secret put PRODUCT_OHRIDSKIPROLOG2
-# Paste this JSON when prompted:
-# {
-#   "github_repo": "zarkob/ohridskiprolog2",
-#   "github_token": "<github token with issue write>",
-#   "image_api_key": "<image host key, optional>",
-#   "testers": [ { "name": "zarko", "token_sha256": "<64 hex>" } ]
-# }
-```
-
-Rules that the relay checks at startup:
-
-- `github_repo` must look like `owner/name`.
-- `github_token` must be present.
-- `testers` must hold at least one entry, and every entry needs a 64-hex
-  `token_sha256`.
-- A broken product setting refuses every report. The relay never falls back.
-
-## 3. Make one tester token
-
-```bash
-token="$(openssl rand -hex 24)"           # 48 hex characters
-printf '%s' "$token" | sha256sum          # the value for token_sha256
-```
-
-Send the token to the tester through a private channel. Store only the hash.
-The token is not a GitHub account and gives no GitHub access.
-
-A tester token can send a report only for the products that list its hash.
-
-## 4. Deploy and check
-
-```bash
-npm install
+npm ci
 npm run typecheck
 npm test
-wrangler deploy
+npm audit
+npx wrangler deploy --dry-run --config wrangler.op2-test.jsonc
 ```
 
-Check the deployed relay with the tester token:
+The dry run checks the worker bundle.
+It does not publish the worker.
+The local tests use fake issue and image services.
+They do not create an issue or upload an image.
+
+Run the shared package checks from `feedback_relay/`:
 
 ```bash
-curl -s https://<your-relay>/reports/00000000-0000-4000-8000-000000000000 \
-  -H "X-Tester-Token: $token"
-# {"ok":true,"status":"not_found"}
+flutter analyze
+flutter test
+bash tool/check_local_server.sh
+bash tool/check_build_boundary.sh
 ```
 
-A wrong token answers `403`. An unknown product answers `404`. Neither answer
-holds a secret.
-
-## 5. Rotate
-
-- **One tester leaves:** remove the entry from the `testers` list and put the
-  secret again.
-- **One token leaks:** make a new token, replace the hash, and send the new
-  token to that tester.
-- **The GitHub token leaks:** revoke it at GitHub, make a new one, and put the
-  product secret again.
-
-## Honest behavior
-
-The relay files one issue for one report id. Before it creates an issue, it
-looks in the backlog for the report marker. A lost answer becomes `unknown`
-until the relay can prove the result. A late GitHub search index keeps the
-state `unknown`; the app then shows `Needs a check` and does not send again.
-
-The relay never returns a token, a key, or a repository name in a response.
-
-## Local checks
-
-The local relay uses a fake backlog and a fake image host. It files no real
-issue and uploads no real image.
+Run both host fixture tests and the example test:
 
 ```bash
-npm test              # 32 checks with fake services
-npm run local         # local relay on a free port
+(cd fixtures/host_alpha && flutter test)
+(cd fixtures/host_beta && flutter test)
+(cd example && flutter test)
 ```
 
-## Related
+## 2. Add the product secret
 
-- [LIVE_STORAGE_PROPOSAL.md](LIVE_STORAGE_PROPOSAL.md) — image storage and
-  tester access proposal for the first live trial
+The existing OP2 test config supplies the `FEEDBACK_STORE` binding.
+Do not create or replace that namespace for this trial.
+
+Create `PRODUCT_OHRIDSKIPROLOG2` with the following fields:
+
+```json
+{
+  "github_repo": "zarkob/ohridskiprolog2",
+  "github_token": "<private fine-grained token>",
+  "testers": [
+    { "name": "<tester name>", "token_sha256": "<64 hex characters>" }
+  ]
+}
+```
+
+Do not add `image_api_key` for the first trial.
+The relay will save the issue without the image.
+The relay will return a note that says it did not store the image.
+The app must show that note beside `Sent`.
+The issue body must say that no image was attached.
+
+Open the secret prompt from `relay/`:
+
+```bash
+npx wrangler secret put PRODUCT_OHRIDSKIPROLOG2 --config wrangler.op2-test.jsonc
+```
+
+Paste the JSON into the prompt.
+Do not place secret JSON in a command argument or tracked file.
+
+## 3. Make a tester token
+
+Make one token for each tester.
+Keep the raw value in a private password store.
+Store its SHA-256 hash in the product secret.
+
+```bash
+tester_token="$(openssl rand -hex 24)"
+printf '%s' "$tester_token" | sha256sum
+```
+
+The token has 48 hexadecimal characters.
+Give it to the tester through a private channel.
+Do not send it in a public issue or commit.
+
+## 4. Deploy after approval
+
+The owner must approve the live test setup before this step.
+The operator must confirm the product secret and tester token first.
+
+```bash
+npx wrangler deploy --config wrangler.op2-test.jsonc
+```
+
+Save the HTTPS worker URL from the command output.
+Do not use the old endpoint for this relay.
+The old endpoint uses the older `/feedback` protocol.
+
+## 5. Check the live relay
+
+Use one valid tester token for these checks.
+Replace the sample id and URL with test values.
+
+```bash
+curl -s https://<new-worker-url>/reports/<unused-report-id> \
+  -H "X-Tester-Token: $tester_token"
+```
+
+The answer must say `not_found`.
+A wrong token must answer `403`.
+An unknown product must answer `404`.
+No answer may show a key, token, or repository secret.
+
+Send one test report with a screenshot.
+The relay must create one issue and return `status: created`.
+The answer must include a note that the image was not stored.
+The issue must say that no image was attached.
+The app must show `Sent`, the issue link, and the image note.
+Check the same report id again.
+It must return the same issue link and the same note.
+
+## 6. Build the test app
+
+Use the checked package revision and the separate test entry.
+Pass these values only to the test build:
+
+```bash
+flutter build apk --release -t lib/main_feedback.dart \
+  --dart-define=FEEDBACK_BUILD_MODE=test \
+  --dart-define=FEEDBACK_BACKEND_URL=https://<new-worker-url> \
+  --dart-define=FEEDBACK_PRODUCT_ID=ohridskiprolog2 \
+  --dart-define=FEEDBACK_TESTER_TOKEN=<private-token>
+```
+
+Do not put the raw token in source or the build record.
+Record the source revision, package, version, build number, APK hash, and screens checked.
+Keep the normal app entry free of feedback imports and build values.
+Build and check the normal production APK without any `FEEDBACK_*` values.
+
+## 7. Close a tester token
+
+Remove a tester hash from `PRODUCT_OHRIDSKIPROLOG2` when access must end.
+Replace a leaked token with a new token and hash.
+Revoke a leaked GitHub token at GitHub.
+Then update the product secret.
+
+## Limits
+
+The first trial has no image host.
+The relay will not store or link the screenshot.
+Cloudflare KV has no compare-and-swap claim.
+Keep the first trial to one tester and do not send one report twice at once.
+The local relay serializes sends, so local checks do not prove this limit safe.

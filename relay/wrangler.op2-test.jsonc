@@ -1,0 +1,10 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "avensora-feedback-test",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-07",
+  "account_id": "8482ce5f8118d3c42dfdad9cd7280033",
+  "kv_namespaces": [
+    { "binding": "FEEDBACK_STORE", "id": "d19c7cddb0c847fa98cb47ef7c136e20" }
+  ]
+}

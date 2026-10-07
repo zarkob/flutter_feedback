@@ -4,7 +4,7 @@ description: >
   step, saved drafts, safe retries, honest delivery states, and one build
   control for test inclusion and production exclusion. The relay server holds
   every destination secret.
-version: 0.2.0
+version: 0.2.1
 homepage: https://github.com/zarkob/flutter_feedback
 repository: https://github.com/zarkob/flutter_feedback
 issue_tracker: https://github.com/zarkob/flutter_feedback/issues

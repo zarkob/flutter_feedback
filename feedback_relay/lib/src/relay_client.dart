@@ -22,13 +22,16 @@ sealed class DeliveryResult {
 /// The destination confirmed the report.
 final class DeliveryConfirmed extends DeliveryResult {
   /// Creates a confirmed result with the issue link.
-  const DeliveryConfirmed(this.issueUrl, {this.duplicate = false});
+  const DeliveryConfirmed(this.issueUrl, {this.duplicate = false, this.note});
 
   /// The link to the product issue.
   final String issueUrl;
 
   /// True when the destination already held this report id.
   final bool duplicate;
+
+  /// An optional note about what the relay could not store.
+  final String? note;
 }
 
 /// The relay holds no record of this report id, so a send is safe.
@@ -72,8 +75,8 @@ class RelayClient {
     http.Client? httpClient,
     this.sendTimeout = const Duration(seconds: 30),
     this.checkTimeout = const Duration(seconds: 15),
-  }) : _httpClient = httpClient ?? http.Client(),
-       _ownsClient = httpClient == null;
+  })  : _httpClient = httpClient ?? http.Client(),
+        _ownsClient = httpClient == null;
 
   /// The build boundary. A production spec keeps the client closed.
   final FeedbackBuildSpec spec;
@@ -94,7 +97,8 @@ class RelayClient {
   Future<DeliveryResult> submit(FeedbackReport report) async {
     final settings = spec.settings;
     if (settings == null) {
-      return const DeliveryFailed('Feedback is not enabled in this build.', retryable: false);
+      return const DeliveryFailed('Feedback is not enabled in this build.',
+          retryable: false);
     }
     final problem = _checkReport(report);
     if (problem != null) {
@@ -115,7 +119,8 @@ class RelayClient {
   Future<DeliveryResult> check(String reportId) async {
     final settings = spec.settings;
     if (settings == null) {
-      return const DeliveryFailed('Feedback is not enabled in this build.', retryable: false);
+      return const DeliveryFailed('Feedback is not enabled in this build.',
+          retryable: false);
     }
     return _post(
       settings: settings,
@@ -161,14 +166,18 @@ class RelayClient {
         request.body = body;
       }
       final streamed = await _httpClient.send(request).timeout(timeout);
-      final response = await http.Response.fromStream(streamed).timeout(timeout);
+      final response =
+          await http.Response.fromStream(streamed).timeout(timeout);
       return _readResult(response);
     } on TimeoutException {
-      return const DeliveryUnknown('The relay did not answer in time. The report may have arrived.');
+      return const DeliveryUnknown(
+          'The relay did not answer in time. The report may have arrived.');
     } on http.ClientException catch (error) {
-      return DeliveryUnknown('The relay was not reachable (${error.message}). The report may have arrived.');
+      return DeliveryUnknown(
+          'The relay was not reachable (${error.message}). The report may have arrived.');
     } catch (error) {
-      return DeliveryUnknown('The send stopped with an unexpected error. The report may have arrived.');
+      return DeliveryUnknown(
+          'The send stopped with an unexpected error. The report may have arrived.');
     }
   }
 
@@ -181,27 +190,39 @@ class RelayClient {
           body = value;
         }
       } on FormatException {
-        return DeliveryUnknown('The relay sent an answer that this app cannot read.');
+        return DeliveryUnknown(
+            'The relay sent an answer that this app cannot read.');
       }
     }
 
     final status = body['status'];
     final issueUrl = body['issue_url'];
     final error = body['error'];
-    final reason = error is String && error.isNotEmpty ? error : 'The relay rejected the report.';
+    final reason = error is String && error.isNotEmpty
+        ? error
+        : 'The relay rejected the report.';
 
     if (response.statusCode == 200 || response.statusCode == 201) {
       if (body['ok'] == true) {
-        if (issueUrl is String && issueUrl.isNotEmpty && (status == 'created' || status == 'duplicate')) {
-          return DeliveryConfirmed(issueUrl, duplicate: status == 'duplicate');
+        if (issueUrl is String &&
+            issueUrl.isNotEmpty &&
+            (status == 'created' || status == 'duplicate')) {
+          final note = body['note'];
+          return DeliveryConfirmed(
+            issueUrl,
+            duplicate: status == 'duplicate',
+            note: note is String && note.isNotEmpty ? note : null,
+          );
         }
         if (status == 'not_found') {
-          return const DeliveryNotRecorded('The relay holds no record of this report.');
+          return const DeliveryNotRecorded(
+              'The relay holds no record of this report.');
         }
         if (status == 'unknown') {
           return DeliveryUnknown(reason);
         }
-        return const DeliveryUnknown('The relay answered without a delivery result.');
+        return const DeliveryUnknown(
+            'The relay answered without a delivery result.');
       }
       return DeliveryFailed(reason, retryable: false);
     }

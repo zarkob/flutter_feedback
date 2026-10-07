@@ -81,13 +81,15 @@ class FeedbackFlow extends ChangeNotifier {
 
   final RelayClient _client;
   final Map<String, ReportDraft> _drafts = <String, ReportDraft>{};
-  final Map<String, Future<DeliveryResult>> _inFlight = <String, Future<DeliveryResult>>{};
+  final Map<String, Future<DeliveryResult>> _inFlight =
+      <String, Future<DeliveryResult>>{};
   bool _recovered = false;
 
   /// The known drafts, newest first.
   List<ReportDraft> get drafts {
     final list = _drafts.values.toList()
-      ..sort((a, b) => b.report.context.capturedAt.compareTo(a.report.context.capturedAt));
+      ..sort((a, b) =>
+          b.report.context.capturedAt.compareTo(a.report.context.capturedAt));
     return list;
   }
 
@@ -104,7 +106,8 @@ class FeedbackFlow extends ChangeNotifier {
   }) {
     final settings = spec.settings;
     if (settings == null) {
-      throw StateError('Feedback is not enabled in this build, so it cannot build a report.');
+      throw StateError(
+          'Feedback is not enabled in this build, so it cannot build a report.');
     }
     return FeedbackReport.create(
       text: text,
@@ -137,7 +140,8 @@ class FeedbackFlow extends ChangeNotifier {
       _drafts[draft.id] = draft;
     }
     notifyListeners();
-    for (final draft in saved.where((d) => d.state == ReportDeliveryState.waiting)) {
+    for (final draft
+        in saved.where((d) => d.state == ReportDeliveryState.waiting)) {
       await check(draft.id);
     }
   }
@@ -167,7 +171,8 @@ class FeedbackFlow extends ChangeNotifier {
   }
 
   Future<DeliveryResult> _send(FeedbackReport report) async {
-    await _record(ReportDraft(report: report, state: ReportDeliveryState.waiting));
+    await _record(
+        ReportDraft(report: report, state: ReportDeliveryState.waiting));
     final result = await _client.submit(report);
     await _apply(report, result);
     return result;
@@ -214,17 +219,27 @@ class FeedbackFlow extends ChangeNotifier {
 
   Future<void> _apply(FeedbackReport report, DeliveryResult result) async {
     switch (result) {
-      case DeliveryConfirmed(:final issueUrl):
-        await _record(ReportDraft(report: report, state: ReportDeliveryState.sent, issueUrl: issueUrl));
+      case DeliveryConfirmed(:final issueUrl, :final note):
+        await _record(ReportDraft(
+            report: report,
+            state: ReportDeliveryState.sent,
+            issueUrl: issueUrl,
+            note: note));
       case DeliveryUnknown(:final reason):
-        await _record(ReportDraft(report: report, state: ReportDeliveryState.needsCheck, note: reason));
+        await _record(ReportDraft(
+            report: report,
+            state: ReportDeliveryState.needsCheck,
+            note: reason));
       case DeliveryNotRecorded(:final reason):
-        await _record(ReportDraft(report: report, state: ReportDeliveryState.waiting, note: reason));
+        await _record(ReportDraft(
+            report: report, state: ReportDeliveryState.waiting, note: reason));
       case DeliveryFailed(:final reason, :final retryable):
         await _record(
           ReportDraft(
             report: report,
-            state: retryable ? ReportDeliveryState.waiting : ReportDeliveryState.failed,
+            state: retryable
+                ? ReportDeliveryState.waiting
+                : ReportDeliveryState.failed,
             note: reason,
           ),
         );

@@ -33,38 +33,62 @@ class FakeRelay {
   });
 
   /// The number of sent reports.
-  int get postCount => requests.where((request) => request.method == 'POST').length;
+  int get postCount =>
+      requests.where((request) => request.method == 'POST').length;
 
   /// The number of delivery checks.
-  int get checkCount => requests.where((request) => request.method == 'GET').length;
+  int get checkCount =>
+      requests.where((request) => request.method == 'GET').length;
 
   /// The JSON body of the last sent report.
-  Map<String, dynamic> get lastBody => jsonDecode(requests.last.body) as Map<String, dynamic>;
+  Map<String, dynamic> get lastBody =>
+      jsonDecode(requests.last.body) as Map<String, dynamic>;
 }
 
 /// A relay answer for a confirmed report.
-http.Response createdResponse(String issueUrl, {String status = 'created'}) =>
-    http.Response(jsonEncode(<String, dynamic>{'ok': true, 'status': status, 'issue_url': issueUrl}), status == 'created' ? 201 : 200);
+http.Response createdResponse(String issueUrl,
+        {String status = 'created', String? note}) =>
+    http.Response(
+      jsonEncode(<String, dynamic>{
+        'ok': true,
+        'status': status,
+        'issue_url': issueUrl,
+        if (note != null) 'note': note
+      }),
+      status == 'created' ? 201 : 200,
+    );
 
 /// A relay answer for a rejected report.
-http.Response errorResponse(String error, int statusCode, {String? delivery}) => http.Response(
-  jsonEncode(<String, dynamic>{'ok': false, 'error': error, if (delivery != null) 'delivery': delivery}),
-  statusCode,
-);
+http.Response errorResponse(String error, int statusCode, {String? delivery}) =>
+    http.Response(
+      jsonEncode(<String, dynamic>{
+        'ok': false,
+        'error': error,
+        if (delivery != null) 'delivery': delivery
+      }),
+      statusCode,
+    );
 
 /// A relay answer for a delivery check.
-http.Response checkResponse(String status, {String? issueUrl}) => http.Response(
-  jsonEncode(<String, dynamic>{'ok': true, 'status': status, if (issueUrl != null) 'issue_url': issueUrl}),
-  200,
-);
+http.Response checkResponse(String status, {String? issueUrl, String? note}) =>
+    http.Response(
+      jsonEncode(<String, dynamic>{
+        'ok': true,
+        'status': status,
+        if (issueUrl != null) 'issue_url': issueUrl,
+        if (note != null) 'note': note
+      }),
+      200,
+    );
 
 /// A test build spec for one product.
-FeedbackBuildSpec testSpec({String productId = 'alpha-notes'}) => FeedbackBuildSpec.forTest(
-  backendUrl: 'https://relay.test',
-  productId: productId,
-  testerToken: 'tester-token',
-  productName: 'Alpha Notes',
-);
+FeedbackBuildSpec testSpec({String productId = 'alpha-notes'}) =>
+    FeedbackBuildSpec.forTest(
+      backendUrl: 'https://relay.test',
+      productId: productId,
+      testerToken: 'tester-token',
+      productName: 'Alpha Notes',
+    );
 
 /// A sample report for one product.
 FeedbackReport sampleReport({
@@ -72,16 +96,21 @@ FeedbackReport sampleReport({
   Uint8List? screenshot,
   String productId = 'alpha-notes',
   String id = '11111111-2222-4333-8444-555555555555',
-}) => FeedbackReport.create(
-  id: id,
-  text: text,
-  expected: 'The saved items stay visible.',
-  steps: '1. Add one item\n2. Restart the app',
-  screenshot: screenshot,
-  productId: productId,
-  appVersion: '1.2.4',
-  buildNumber: '77',
-  buildMode: 'test',
-  screen: 'notes_list',
-  device: const DeviceFacts(model: 'Pixel 7', platform: 'android', osVersion: 'Android 15', locale: 'en_US'),
-);
+}) =>
+    FeedbackReport.create(
+      id: id,
+      text: text,
+      expected: 'The saved items stay visible.',
+      steps: '1. Add one item\n2. Restart the app',
+      screenshot: screenshot,
+      productId: productId,
+      appVersion: '1.2.4',
+      buildNumber: '77',
+      buildMode: 'test',
+      screen: 'notes_list',
+      device: const DeviceFacts(
+          model: 'Pixel 7',
+          platform: 'android',
+          osVersion: 'Android 15',
+          locale: 'en_US'),
+    );

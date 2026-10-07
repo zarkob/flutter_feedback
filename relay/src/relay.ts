@@ -12,6 +12,8 @@ import { imageHostFor, type ImageHost } from './images.ts';
 import { readReportRequest, ValidationError, type ReportRequest } from './report.ts';
 import type { DeliveryRecord, DeliveryStore, RateLimiter } from './store.ts';
 
+const IMAGE_NOT_STORED_NOTE = 'The image was not stored, because this product has no image host yet.';
+
 /** Everything the relay needs. Tests supply fakes. */
 export interface RelayDeps {
   destinations: DestinationMap;
@@ -70,17 +72,17 @@ export function createRelay(deps: RelayDeps): RelayHandler {
     }
     if (existing && existing.status === 'created' && existing.issue_url) {
       log('duplicate', { product: bundle.product_id, report: report.report_id });
-      return json({ ok: true, status: 'duplicate', issue_url: existing.issue_url }, 200);
+      return json({ ok: true, status: 'duplicate', issue_url: existing.issue_url, ...(existing.note ? { note: existing.note } : {}) }, 200);
     }
     if (existing && (existing.status === 'pending' || existing.status === 'unknown')) {
       // A claim exists but delivery is not proven. Look before any new issue.
       const resolved = await resolveDelivery(bundle, report.report_id, existing);
       if (resolved.status === 'created' && resolved.issue_url) {
         await deps.store.put(resolved);
-        return json({ ok: true, status: 'duplicate', issue_url: resolved.issue_url }, 200);
+        return json({ ok: true, status: 'duplicate', issue_url: resolved.issue_url, ...(resolved.note ? { note: resolved.note } : {}) }, 200);
       }
       await deps.store.put(resolved);
-      return json({ ok: true, status: 'unknown', error: 'The relay cannot prove what happened to this report yet.' }, 200);
+      return json({ ok: true, status: 'unknown', error: 'The relay cannot prove what happened to this report yet.', ...(resolved.note ? { note: resolved.note } : {}) }, 200);
     }
 
     const claim: DeliveryRecord = {
@@ -94,7 +96,7 @@ export function createRelay(deps: RelayDeps): RelayHandler {
     } else if (!(await deps.store.claim(claim))) {
       const taken = await deps.store.get(report.report_id);
       if (taken?.issue_url) {
-        return json({ ok: true, status: 'duplicate', issue_url: taken.issue_url }, 200);
+        return json({ ok: true, status: 'duplicate', issue_url: taken.issue_url, ...(taken.note ? { note: taken.note } : {}) }, 200);
       }
       return json({ ok: true, status: 'unknown', error: 'Another send of this report is running.' }, 200);
     }
@@ -121,7 +123,8 @@ export function createRelay(deps: RelayDeps): RelayHandler {
           log('image_failed', { product: bundle.product_id, report: report.report_id });
           return json({ ok: false, error: 'Screenshot upload failed.', delivery: 'failed' }, 502);
         }
-        note = 'The image was not stored, because this product has no image host yet.';
+        note = IMAGE_NOT_STORED_NOTE;
+        await deps.store.put({ ...claim, note, updated_at: stamp() });
       }
     }
 
@@ -131,7 +134,7 @@ export function createRelay(deps: RelayDeps): RelayHandler {
         title: buildIssueTitle(report),
         body: buildIssueBody(report, imageUrl),
       });
-      const record: DeliveryRecord = { ...claim, status: 'created', issue_url: issue.url, updated_at: stamp() };
+      const record: DeliveryRecord = { ...claim, status: 'created', issue_url: issue.url, note, updated_at: stamp() };
       await deps.store.put(record);
       log('created', { product: bundle.product_id, report: report.report_id });
       return json({ ok: true, status: 'created', issue_url: issue.url, ...(note ? { note } : {}) }, 201);
@@ -139,12 +142,12 @@ export function createRelay(deps: RelayDeps): RelayHandler {
       // The issue may exist even when the answer was lost. Look again.
       const recovered = await safeFind(deps.backlog, bundle, report.report_id);
       if (recovered) {
-        const record: DeliveryRecord = { ...claim, status: 'created', issue_url: recovered.url, updated_at: stamp() };
+        const record: DeliveryRecord = { ...claim, status: 'created', issue_url: recovered.url, note, updated_at: stamp() };
         await deps.store.put(record);
         log('created_after_error', { product: bundle.product_id, report: report.report_id });
-        return json({ ok: true, status: 'created', issue_url: recovered.url }, 201);
+        return json({ ok: true, status: 'created', issue_url: recovered.url, ...(note ? { note } : {}) }, 201);
       }
-      const unknown: DeliveryRecord = { ...claim, status: 'unknown', note: 'Issue creation did not answer.', updated_at: stamp() };
+      const unknown: DeliveryRecord = { ...claim, status: 'unknown', note, updated_at: stamp() };
       await deps.store.put(unknown);
       log('issue_unknown', { product: bundle.product_id, report: report.report_id });
       return json({ ok: false, error: 'Issue creation did not answer. The report may exist.', delivery: 'unknown' }, 502);
@@ -168,7 +171,7 @@ export function createRelay(deps: RelayDeps): RelayHandler {
       return json({ ok: false, error: 'Tester access denied.' }, 403);
     }
     if (record.status === 'created' && record.issue_url) {
-      return json({ ok: true, status: 'created', issue_url: record.issue_url }, 200);
+      return json({ ok: true, status: 'created', issue_url: record.issue_url, ...(record.note ? { note: record.note } : {}) }, 200);
     }
     if (record.status === 'failed') {
       return json({ ok: true, status: 'not_found', note: 'The last attempt failed before the destination accepted it.' }, 200);
@@ -176,17 +179,18 @@ export function createRelay(deps: RelayDeps): RelayHandler {
     const resolved = await resolveDelivery(bundle, reportId, record);
     await deps.store.put(resolved);
     if (resolved.status === 'created' && resolved.issue_url) {
-      return json({ ok: true, status: 'created', issue_url: resolved.issue_url }, 200);
+      return json({ ok: true, status: 'created', issue_url: resolved.issue_url, ...(resolved.note ? { note: resolved.note } : {}) }, 200);
     }
-    return json({ ok: true, status: 'unknown', error: 'The relay cannot prove what happened to this report yet.' }, 200);
+    return json({ ok: true, status: 'unknown', error: 'The relay cannot prove what happened to this report yet.', ...(resolved.note ? { note: resolved.note } : {}) }, 200);
   }
 
   async function resolveDelivery(bundle: ProductBundle, reportId: string, record: DeliveryRecord): Promise<DeliveryRecord> {
     const found = await safeFind(deps.backlog, bundle, reportId);
+    const note = record.note === IMAGE_NOT_STORED_NOTE ? record.note : undefined;
     if (found) {
-      return { ...record, status: 'created', issue_url: found.url, note: undefined, updated_at: stamp() };
+      return { ...record, status: 'created', issue_url: found.url, note, updated_at: stamp() };
     }
-    return { ...record, status: 'unknown', note: 'Delivery is not proven.', updated_at: stamp() };
+    return { ...record, status: 'unknown', note, updated_at: stamp() };
   }
 
   return async function relay(request: Request): Promise<Response> {

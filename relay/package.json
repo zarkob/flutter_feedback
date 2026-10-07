@@ -16,5 +16,8 @@
     "@types/node": "^26.6.4",
     "typescript": "^5.7.0",
     "wrangler": "^4.0.0"
+  },
+  "overrides": {
+    "sharp": "^0.35.5"
   }
 }

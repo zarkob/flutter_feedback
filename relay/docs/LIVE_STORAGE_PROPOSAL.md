@@ -6,6 +6,10 @@ against a live service.**
 The task checks use dummy images, a fake image host, and a local relay. The
 first live trial needs these two decisions.
 
+The current OP2 test plan uses no image host.
+It checks that the relay saves the report and tells the tester that it did not store the image.
+This trial does not prove image upload or image retention.
+
 ## Decision 1: where tester images live
 
 Two small options.
@@ -25,9 +29,8 @@ Two small options.
   and deletion become possible.
 - Limit: more setup work and one more secret to rotate.
 
-**Recommendation: Option A for the first trial.** It needs one key and no code
-change, and the trial tests the report path rather than the storage path.
-Choose Option B before tester images may hold private product data.
+Option A is the smaller later image trial because it needs no code change.
+Use Option B before tester images may hold private product data.
 
 ## Decision 2: how a tester gets access
 
@@ -46,13 +49,13 @@ small. Move to a per-device token only when more testers join.
 
 ## Steps before the first live trial
 
-1. The owner approves the relay deployment and the image host key.
-2. The operator creates the `FEEDBACK_STORE` namespace and the product secret.
+1. The owner approves the separate test worker and report destination.
+2. The operator checks the test `FEEDBACK_STORE` binding and adds the product secret.
 3. The operator makes the tester token and sends it in private.
 4. The relay is deployed and checked with `curl` (see the runbook).
 5. One product builds a test variant with the three relay settings.
-6. One tester sends one report with a dummy image.
-7. The tester checks that `Sent` shows a real issue link.
+6. One tester sends one report with a screenshot and no image host configured.
+7. The tester checks `Sent`, the real issue link, and the note that the image was not stored.
 8. The owner selects the work from the issue and opens a task.
 
 Step 2 of this list needs its own approved check. This task leaves it open.

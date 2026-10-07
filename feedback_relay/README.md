@@ -8,7 +8,7 @@ before Send.
 The package is independent. It needs no product code and no Avensora OS code.
 It works in any Flutter app and the report format is plain JSON.
 
-Version: `0.2.0`. Original source: this repository's `feedback_relay` package
+Version: `0.2.1`. Original source: this repository's `feedback_relay` package
 at revision `38b6a436c0a9e53856563c2f170744e3fd385f9c`.
 
 ## What the tester gets
@@ -19,6 +19,8 @@ at revision `38b6a436c0a9e53856563c2f170744e3fd385f9c`.
 - Three clear actions: **Send**, **Keep as draft**, **Cancel**.
 - Honest states: `Saved`, `Waiting to send`, `Sent`, `Needs a check`,
   `Not sent`. `Sent` is used only after the relay confirms delivery.
+- A confirmed report can show a relay note. For example, it shows when the
+  issue was saved but the image was not stored.
 
 A report does not need a GitHub account. The tester token is issued by the
 operator.
