@@ -394,6 +394,7 @@ class _FeedbackLayoutDelegate extends MultiChildLayoutDelegate {
   void performLayout(Size size) {
     if (!displayFeedback) {
       layoutChild(_screenshotId, BoxConstraints.tight(size));
+      positionChild(_screenshotId, Offset.zero);
       return;
     }
     // Lay out the controls.

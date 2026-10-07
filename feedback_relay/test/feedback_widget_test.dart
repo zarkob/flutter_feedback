@@ -74,6 +74,8 @@ Future<void> _submitFromCapture(WidgetTester tester,
       UserFeedback(text: text, screenshot: screenshot ?? Uint8List(0)));
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 400));
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 400));
 }
 
 /// Taps one preview or draft action and lets the sheet close.
@@ -81,6 +83,7 @@ Future<void> _tapAndSettleSheet(WidgetTester tester, Finder finder) async {
   await tester.tap(finder);
   await tester.pump();
   await tester.pump(const Duration(milliseconds: 400));
+  await tester.pump();
 }
 
 void main() {

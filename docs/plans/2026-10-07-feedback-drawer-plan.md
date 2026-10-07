@@ -18,6 +18,10 @@ No new package or server change is needed.
 - [ ] Update the existing capture tests for completion and cancellation.
 - [ ] Document the drawer in `feedback_relay/README.md`.
 - [ ] Set the shared package version to `0.3.0`.
+- [ ] Reset the local capture child position to zero after capture closes.
+- [ ] Use `feedback: path: ../feedback` inside the shared Git package.
+- [ ] End capture work when its host is removed.
+- [ ] Check the local capture package tests and analysis.
 
 Use this public contract:
 
@@ -53,6 +57,9 @@ Close the drawer and await its `completed` future before an action.
 Obtain the restored host navigator context after that wait.
 Capture must name the host route, not the drawer route.
 Restore the tab after dismissal, capture cancellation, preview exit, or failure.
+Wait for the capture reverse animation before restoring the tab.
+Report errors through `FlutterError` after cleanup.
+Keep host page bounds and position unchanged after capture closes.
 Reject repeated opening while one flow is active.
 Remove temporary listeners when the flow ends or the control is disposed.
 

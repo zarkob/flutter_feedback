@@ -8,7 +8,7 @@ before Send.
 The package is independent. It needs no product code and no Avensora OS code.
 It works in any Flutter app and the report format is plain JSON.
 
-Version: `0.2.1`. Original source: this repository's `feedback_relay` package
+Version: `0.3.0`. Original source: this repository's `feedback_relay` package
 at revision `38b6a436c0a9e53856563c2f170744e3fd385f9c`.
 
 ## What the tester gets
@@ -92,6 +92,39 @@ const FeedbackEntryButton(),
 // and, when the saved reports should be on screen:
 const FeedbackDraftList(),
 ```
+
+The shared drawer can replace a fixed footer. It wraps the host navigator and
+keeps that navigator at full size. Give it the root navigator key and the
+labels for the current language:
+
+```dart
+final navigatorKey = GlobalKey<NavigatorState>();
+
+FeedbackHost(
+  spec: spec,
+  store: store,
+  contextSource: contextSource,
+  child: FeedbackDrawerOverlay(
+    navigatorKey: navigatorKey,
+    onOpenSavedReports: () async {
+      await navigatorKey.currentState!.push<void>(
+        MaterialPageRoute<void>(builder: (_) => const SavedReportsPage()),
+      );
+    },
+    feedbackLabel: 'Feedback',
+    sendLabel: 'Send feedback',
+    savedLabel: 'Saved reports',
+    closeLabel: 'Close feedback',
+    child: MaterialApp(
+      navigatorKey: navigatorKey,
+      home: const HomePage(),
+    ),
+  ),
+)
+```
+
+The drawer closes before it starts capture or opens the saved report page.
+The edge tab stays hidden until capture and preview end.
 
 5. Build the test variant with the relay settings:
 

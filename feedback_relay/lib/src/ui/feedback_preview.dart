@@ -30,13 +30,23 @@ class FeedbackPreviewSheet extends StatelessWidget {
 
   /// Opens the preview and returns the tester's choice, or null when it closes.
   static Future<FeedbackPreviewAction?> show(
-      BuildContext context, FeedbackReport report) {
-    return showModalBottomSheet<FeedbackPreviewAction>(
-      context: context,
+      BuildContext context, FeedbackReport report) async {
+    final navigator = Navigator.of(context);
+    final localizations = MaterialLocalizations.of(context);
+    final route = ModalBottomSheetRoute<FeedbackPreviewAction>(
+      builder: (_) => FeedbackPreviewSheet(report: report),
+      capturedThemes:
+          InheritedTheme.capture(from: context, to: navigator.context),
+      barrierLabel: localizations.scrimLabel,
+      barrierOnTapHint:
+          localizations.scrimOnTapHint(localizations.bottomSheetLabel),
+      modalBarrierColor: Theme.of(context).bottomSheetTheme.modalBarrierColor,
       isScrollControlled: true,
       useSafeArea: true,
-      builder: (_) => FeedbackPreviewSheet(report: report),
     );
+    final action = await navigator.push(route);
+    await route.completed;
+    return action;
   }
 
   @override

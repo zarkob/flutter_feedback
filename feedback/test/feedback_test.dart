@@ -11,6 +11,26 @@ import 'test_app.dart';
 
 void main() {
   group('BetterFeedback', () {
+    testWidgets('returns the host to its original bounds after capture',
+        (tester) async {
+      const hostKey = Key('feedback_host_bounds');
+      final widget = BetterFeedback(
+        child: MaterialApp(
+          home: Scaffold(body: SizedBox.expand(key: hostKey)),
+        ),
+      );
+      await tester.pumpWidget(widget);
+      final before = tester.getRect(find.byKey(hostKey));
+      final controller = BetterFeedback.of(tester.element(find.byKey(hostKey)));
+
+      controller.show((_) {});
+      await tester.pumpAndSettle();
+      controller.hide();
+      await tester.pumpAndSettle();
+
+      expect(tester.getRect(find.byKey(hostKey)), before);
+    });
+
     testWidgets('can open feedback with default settings', (tester) async {
       final widget = BetterFeedback(
         child: Builder(

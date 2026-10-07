@@ -4,6 +4,8 @@
 /// gates them, the wrapper, and the sending path.
 library;
 
+import 'dart:async';
+
 import 'package:feedback/feedback.dart';
 import 'package:flutter/material.dart';
 
@@ -34,33 +36,94 @@ String deliveryStateLabel(ReportDeliveryState state) {
 ///
 /// The upstream capture and drawing controls stay unchanged. After the tester
 /// submits, the preview shows the text and the image before any send.
-Future<void> openFeedbackCapture(BuildContext context, {void Function(DeliveryResult result)? onResult}) async {
+Future<void> openFeedbackCapture(
+  BuildContext context, {
+  void Function(DeliveryResult result)? onResult,
+}) {
   final flow = FeedbackScope.of(context);
+  final lifecycle = FeedbackScope.lifecycleOf(context);
   final navigator = Navigator.of(context, rootNavigator: true);
   final controller = BetterFeedback.of(context);
-  controller.show((UserFeedback feedback) async {
-    // The capture layer closes first. The screenshot and the tester text are
-    // already captured, and the preview must be the top surface.
-    controller.hide();
-    final extra = feedback.extra ?? const <String, dynamic>{};
-    final report = flow.buildReport(
-      text: feedback.text,
-      expected: extra[kExpectedExtraKey] is String ? extra[kExpectedExtraKey] as String : null,
-      steps: extra[kStepsExtraKey] is String ? extra[kStepsExtraKey] as String : null,
-      screenshot: feedback.screenshot,
-    );
-    final action = await FeedbackPreviewSheet.show(navigator.context, report);
-    switch (action) {
-      case FeedbackPreviewAction.send:
-        final result = await flow.send(report);
-        onResult?.call(result);
-      case FeedbackPreviewAction.keepDraft:
-        await flow.keep(report);
-      case FeedbackPreviewAction.cancel:
-      case null:
-        break;
+  final finished = Completer<void>();
+  var submitted = false;
+  var done = false;
+  Timer? cancellationTimer;
+  VoidCallback unregisterHost = () {};
+  late VoidCallback onControllerChanged;
+
+  void finish({Object? error, StackTrace? stackTrace}) {
+    if (done) return;
+    done = true;
+    cancellationTimer?.cancel();
+    controller.removeListener(onControllerChanged);
+    unregisterHost();
+    if (error == null) {
+      finished.complete();
+    } else {
+      finished.completeError(error, stackTrace);
     }
-  });
+  }
+
+  onControllerChanged = () {
+    if (!controller.isVisible && !submitted && cancellationTimer == null) {
+      cancellationTimer = Timer(const Duration(milliseconds: 300), () {
+        unawaited(() async {
+          // The capture route remains on screen during its reverse animation.
+          await WidgetsBinding.instance.endOfFrame;
+          if (!controller.isVisible && !submitted) finish();
+          cancellationTimer = null;
+        }());
+      });
+    }
+  };
+
+  controller.addListener(onControllerChanged);
+  if (lifecycle != null) {
+    unregisterHost = lifecycle.register(() {
+      finish();
+    });
+  }
+  try {
+    controller.show((UserFeedback feedback) async {
+      // Mark the submit first. The next hide is part of submit, not cancel.
+      submitted = true;
+      controller.hide();
+      try {
+        await Future<void>.delayed(const Duration(milliseconds: 300));
+        await WidgetsBinding.instance.endOfFrame;
+        if (!context.mounted || !navigator.mounted) return;
+        final extra = feedback.extra ?? const <String, dynamic>{};
+        final report = flow.buildReport(
+          text: feedback.text,
+          expected: extra[kExpectedExtraKey] is String
+              ? extra[kExpectedExtraKey] as String
+              : null,
+          steps: extra[kStepsExtraKey] is String
+              ? extra[kStepsExtraKey] as String
+              : null,
+          screenshot: feedback.screenshot,
+        );
+        final action = await FeedbackPreviewSheet.show(context, report);
+        switch (action) {
+          case FeedbackPreviewAction.send:
+            final result = await flow.send(report);
+            onResult?.call(result);
+          case FeedbackPreviewAction.keepDraft:
+            await flow.keep(report);
+          case FeedbackPreviewAction.cancel:
+          case null:
+            break;
+        }
+      } catch (error, stackTrace) {
+        finish(error: error, stackTrace: stackTrace);
+      } finally {
+        finish();
+      }
+    });
+  } catch (error, stackTrace) {
+    finish(error: error, stackTrace: stackTrace);
+  }
+  return finished.future;
 }
 
 /// A button that opens the feedback flow.
@@ -93,7 +156,21 @@ class FeedbackEntryButton extends StatelessWidget {
     }
     return FilledButton.icon(
       key: const Key('feedback_entry_button'),
-      onPressed: () => openFeedbackCapture(context, onResult: onResult),
+      onPressed: () {
+        unawaited(
+          openFeedbackCapture(context, onResult: onResult).catchError(
+            (Object error, StackTrace stackTrace) {
+              FlutterError.reportError(
+                FlutterErrorDetails(
+                  exception: error,
+                  stack: stackTrace,
+                  library: 'feedback_relay',
+                ),
+              );
+            },
+          ),
+        );
+      },
       icon: Icon(icon),
       label: Text(label),
     );
@@ -157,7 +234,10 @@ class _DraftTile extends StatelessWidget {
               key: Key('draft_state_${draft.id}'),
             ),
             const SizedBox(height: 4),
-            Text(report.text, maxLines: 2, overflow: TextOverflow.ellipsis, style: theme.textTheme.bodyMedium),
+            Text(report.text,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium),
             const SizedBox(height: 4),
             Text(
               '${report.context.screen} · ${report.context.capturedAt.toUtc().toIso8601String()} · ${report.id}',
@@ -181,7 +261,8 @@ class _DraftTile extends StatelessWidget {
                     onPressed: sending ? null : () => flow.check(draft.id),
                     child: const Text('Check delivery'),
                   ),
-                if (draft.state != ReportDeliveryState.sent && draft.state != ReportDeliveryState.needsCheck)
+                if (draft.state != ReportDeliveryState.sent &&
+                    draft.state != ReportDeliveryState.needsCheck)
                   OutlinedButton(
                     key: Key('draft_retry_${draft.id}'),
                     onPressed: sending ? null : () => flow.retry(draft.id),

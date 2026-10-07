@@ -34,6 +34,7 @@ export 'src/feedback_flow.dart';
 export 'src/relay_client.dart';
 export 'src/report.dart';
 export 'src/ui/feedback_entry.dart';
+export 'src/ui/feedback_drawer.dart';
 export 'src/ui/feedback_form.dart';
 export 'src/ui/feedback_host.dart';
 export 'src/ui/feedback_preview.dart';

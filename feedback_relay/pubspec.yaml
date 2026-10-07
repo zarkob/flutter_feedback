@@ -1,10 +1,11 @@
 name: feedback_relay
+publish_to: none
 description: >
   Shared feedback tool for Avensora test builds. Quick reports with a preview
   step, saved drafts, safe retries, honest delivery states, and one build
   control for test inclusion and production exclusion. The relay server holds
   every destination secret.
-version: 0.2.1
+version: 0.3.0
 homepage: https://github.com/zarkob/flutter_feedback
 repository: https://github.com/zarkob/flutter_feedback
 issue_tracker: https://github.com/zarkob/flutter_feedback/issues
@@ -16,7 +17,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  feedback: ^3.2.0
+  feedback:
+    path: ../feedback
   http: ^1.0.0
 
 dev_dependencies:

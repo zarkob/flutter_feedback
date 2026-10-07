@@ -52,10 +52,9 @@ packages:
   feedback:
     dependency: "direct main"
     description:
-      name: feedback
-      sha256: "55edce4f8f0ec01a5ff023e29c5c57df86a7391c831d5647e3b3fdff05e4b01e"
-      url: "https://pub.dev"
-    source: hosted
+      path: "../feedback"
+      relative: true
+    source: path
     version: "3.2.0"
   flutter:
     dependency: "direct main"

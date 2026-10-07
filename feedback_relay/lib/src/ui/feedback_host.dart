@@ -5,6 +5,8 @@
 /// the wrapper, the controls, and the sending path all stay out.
 library;
 
+import 'dart:async';
+
 import 'package:feedback/feedback.dart';
 import 'package:flutter/material.dart';
 
@@ -17,10 +19,19 @@ import 'feedback_form.dart';
 /// Gives the [FeedbackFlow] to the widgets below it.
 class FeedbackScope extends InheritedNotifier<FeedbackFlow> {
   /// Creates a scope around one flow.
-  const FeedbackScope({required super.notifier, required super.child, super.key});
+  const FeedbackScope({
+    required super.notifier,
+    required super.child,
+    this.lifecycle,
+    super.key,
+  });
+
+  /// The host lifecycle, when this scope belongs to a [FeedbackHost].
+  final FeedbackHostLifecycle? lifecycle;
 
   /// The flow of the nearest host, or null when no host is present.
-  static FeedbackFlow? maybeOf(BuildContext context) => context.dependOnInheritedWidgetOfExactType<FeedbackScope>()?.notifier;
+  static FeedbackFlow? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<FeedbackScope>()?.notifier;
 
   /// The flow of the nearest host.
   ///
@@ -28,9 +39,40 @@ class FeedbackScope extends InheritedNotifier<FeedbackFlow> {
   static FeedbackFlow of(BuildContext context) {
     final flow = maybeOf(context);
     if (flow == null) {
-      throw FlutterError('No FeedbackHost is above this widget. Wrap the app once with FeedbackHost.');
+      throw FlutterError(
+          'No FeedbackHost is above this widget. Wrap the app once with FeedbackHost.');
     }
     return flow;
+  }
+
+  /// The lifecycle of the nearest host, or null for a standalone scope.
+  static FeedbackHostLifecycle? lifecycleOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<FeedbackScope>()?.lifecycle;
+}
+
+/// Signals active capture flows when their host is removed.
+class FeedbackHostLifecycle {
+  final Set<VoidCallback> _cleanup = <VoidCallback>{};
+  bool _closed = false;
+
+  /// Registers cleanup and returns a function that removes the registration.
+  VoidCallback register(VoidCallback cleanup) {
+    if (_closed) {
+      scheduleMicrotask(cleanup);
+      return () {};
+    }
+    _cleanup.add(cleanup);
+    return () => _cleanup.remove(cleanup);
+  }
+
+  /// Closes the host and ends its active flows.
+  void close() {
+    if (_closed) return;
+    _closed = true;
+    for (final cleanup in List<VoidCallback>.of(_cleanup)) {
+      cleanup();
+    }
+    _cleanup.clear();
   }
 }
 
@@ -98,6 +140,7 @@ class FeedbackHost extends StatefulWidget {
 
 class _FeedbackHostState extends State<FeedbackHost> {
   late FeedbackFlow _flow;
+  final FeedbackHostLifecycle _lifecycle = FeedbackHostLifecycle();
   bool _ownsFlow = false;
 
   @override
@@ -115,6 +158,7 @@ class _FeedbackHostState extends State<FeedbackHost> {
 
   @override
   void dispose() {
+    _lifecycle.close();
     if (_ownsFlow) {
       _flow.dispose();
     }
@@ -133,7 +177,11 @@ class _FeedbackHostState extends State<FeedbackHost> {
       darkTheme: widget.darkTheme,
       mode: widget.mode,
       pixelRatio: widget.pixelRatio,
-      child: FeedbackScope(notifier: _flow, child: widget.child),
+      child: FeedbackScope(
+        notifier: _flow,
+        lifecycle: _lifecycle,
+        child: widget.child,
+      ),
     );
   }
 }
