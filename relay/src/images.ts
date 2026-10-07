@@ -38,7 +38,8 @@ export class ImgbbImageHost implements ImageHost {
       throw new Error(`The image host answered ${response.status}.`);
     }
     const data = (await response.json()) as { data?: { display_url?: string; url?: string } };
-    const url = data.data?.display_url ?? data.data?.url;
+    // The display link can point to a small image. Keep the full screenshot.
+    const url = data.data?.url ?? data.data?.display_url;
     if (!url) {
       throw new Error('The image host returned no link.');
     }
