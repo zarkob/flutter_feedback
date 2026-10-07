@@ -350,11 +350,41 @@ describe('delivery results', () => {
     assert.equal(checkedBody.note, note);
   });
 
+  test('a pre-create search failure can retry after a later empty search', async () => {
+    const { relay, backlog, store } = await harness({ imageHost: false });
+    const note = 'The image was not stored, because this product has no image host yet.';
+    backlog.searchModes = ['error'];
+
+    const first = await relay(post(reportBody({ screenshot_b64: 'AA==' })));
+    assert.equal(first.status, 502);
+    assert.equal(((await first.json()) as Record<string, unknown>).delivery, 'unknown');
+    assert.equal(backlog.createCalls, 0);
+
+    backlog.searchMode = 'error';
+    const uncertainCheck = await relay(check('11111111-2222-4333-8444-555555555555'));
+    assert.equal(((await uncertainCheck.json()) as Record<string, unknown>).status, 'unknown');
+    assert.equal(backlog.createCalls, 0);
+
+    backlog.searchMode = 'ok';
+    const emptyCheck = await relay(check('11111111-2222-4333-8444-555555555555'));
+    assert.equal(((await emptyCheck.json()) as Record<string, unknown>).status, 'not_found');
+    assert.equal(backlog.createCalls, 0);
+
+    const retry = await relay(post(reportBody({ screenshot_b64: 'AA==' })));
+    const retryBody = (await retry.json()) as Record<string, unknown>;
+    assert.equal(retry.status, 201);
+    assert.equal(retryBody.status, 'created');
+    assert.equal(retryBody.note, note);
+    assert.equal(backlog.createCalls, 1);
+    assert.equal(backlog.issues.length, 1);
+    assert.equal(store.all()[0].status, 'created');
+  });
+
   test('keeps the missing-image note through an unknown result and later recovery', async () => {
     const { relay, backlog, store } = await harness({ imageHost: false });
     const note = 'The image was not stored, because this product has no image host yet.';
     backlog.createMode = 'create_then_error';
-    backlog.searchMode = 'error';
+    backlog.searchModes = ['ok', 'error'];
 
     const first = await relay(post(reportBody({ screenshot_b64: 'AA==' })));
     const firstBody = (await first.json()) as Record<string, unknown>;
@@ -364,6 +394,7 @@ describe('delivery results', () => {
     assert.equal(backlog.issues.length, 1);
     assert.match(backlog.issues[0].body, /_No image was attached\._/);
 
+    backlog.searchMode = 'error';
     const stillUnknown = await relay(check('11111111-2222-4333-8444-555555555555'));
     const stillUnknownBody = (await stillUnknown.json()) as Record<string, unknown>;
     assert.equal(stillUnknownBody.status, 'unknown');
@@ -390,7 +421,7 @@ describe('delivery results', () => {
   test('an unknown issue result stays unknown and keeps the app out of a blind retry', async () => {
     const { relay, backlog, store } = await harness();
     backlog.createMode = 'error';
-    backlog.searchMode = 'error';
+    backlog.searchModes = ['ok', 'error'];
 
     const response = await relay(post(reportBody()));
     const body = (await response.json()) as Record<string, unknown>;
@@ -409,7 +440,7 @@ describe('delivery results', () => {
     const { relay, backlog, store } = await harness();
     // The issue is filed, the answer is lost, and the search cannot help yet.
     backlog.createMode = 'create_then_error';
-    backlog.searchMode = 'error';
+    backlog.searchModes = ['ok', 'error'];
 
     const response = await relay(post(reportBody()));
     const body = (await response.json()) as Record<string, unknown>;

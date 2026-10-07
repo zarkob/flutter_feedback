@@ -18,7 +18,7 @@ export class ImgbbImageHost implements ImageHost {
   private readonly fetchImpl: typeof fetch;
 
   constructor(fetchImpl: typeof fetch = fetch) {
-    this.fetchImpl = fetchImpl;
+    this.fetchImpl = fetchImpl.bind(globalThis);
   }
 
   async upload(bundle: ProductBundle, imageBase64: string): Promise<string> {

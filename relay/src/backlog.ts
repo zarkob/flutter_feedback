@@ -26,16 +26,32 @@ export interface Backlog {
   findByReportId(bundle: ProductBundle, reportId: string): Promise<IssueRef | null>;
 }
 
+/** A safe GitHub failure summary. It never holds request or response content. */
+export class GitHubApiError extends Error {
+  readonly operation: 'create' | 'search';
+  readonly httpStatus: number | null;
+
+  constructor(
+    operation: 'create' | 'search',
+    httpStatus: number | null,
+  ) {
+    super(`GitHub ${operation} request failed${httpStatus === null ? '' : ` with status ${httpStatus}`}.`);
+    this.name = 'GitHubApiError';
+    this.operation = operation;
+    this.httpStatus = httpStatus;
+  }
+}
+
 /** The GitHub Issues destination. */
 export class GitHubBacklog implements Backlog {
   private readonly fetchImpl: typeof fetch;
 
   constructor(fetchImpl: typeof fetch = fetch) {
-    this.fetchImpl = fetchImpl;
+    this.fetchImpl = fetchImpl.bind(globalThis);
   }
 
   async createIssue(bundle: ProductBundle, issue: IssueRequest): Promise<IssueRef> {
-    const response = await this.fetchImpl(`https://api.github.com/repos/${bundle.github_repo}/issues`, {
+    const response = await this.request('create', `https://api.github.com/repos/${bundle.github_repo}/issues`, {
       method: 'POST',
       headers: this.headers(bundle),
       body: JSON.stringify({
@@ -45,11 +61,16 @@ export class GitHubBacklog implements Backlog {
       }),
     });
     if (!response.ok) {
-      throw new Error(`GitHub answered ${response.status}.`);
+      throw new GitHubApiError('create', response.status);
     }
-    const data = (await response.json()) as { html_url?: string };
+    let data: { html_url?: string };
+    try {
+      data = (await response.json()) as { html_url?: string };
+    } catch {
+      throw new GitHubApiError('create', response.status);
+    }
     if (!data.html_url) {
-      throw new Error('GitHub returned no issue link.');
+      throw new GitHubApiError('create', response.status);
     }
     return { url: data.html_url };
   }
@@ -61,14 +82,19 @@ export class GitHubBacklog implements Backlog {
    * delivery state unknown instead of creating a second issue.
    */
   async findByReportId(bundle: ProductBundle, reportId: string): Promise<IssueRef | null> {
-    const query = encodeURIComponent(`repo:${bundle.github_repo} in:body "${reportMarker(reportId)}"`);
-    const response = await this.fetchImpl(`https://api.github.com/search/issues?q=${query}`, {
+    const query = encodeURIComponent(`repo:${bundle.github_repo} is:issue in:body "${reportMarker(reportId)}"`);
+    const response = await this.request('search', `https://api.github.com/search/issues?q=${query}`, {
       headers: this.headers(bundle),
     });
     if (!response.ok) {
-      throw new Error(`GitHub search answered ${response.status}.`);
+      throw new GitHubApiError('search', response.status);
     }
-    const data = (await response.json()) as { items?: Array<{ html_url?: string }> };
+    let data: { items?: Array<{ html_url?: string }> };
+    try {
+      data = (await response.json()) as { items?: Array<{ html_url?: string }> };
+    } catch {
+      throw new GitHubApiError('search', response.status);
+    }
     const item = data.items?.find((entry) => typeof entry.html_url === 'string');
     return item?.html_url ? { url: item.html_url } : null;
   }
@@ -81,6 +107,14 @@ export class GitHubBacklog implements Backlog {
       'Content-Type': 'application/json',
       'User-Agent': 'avensora-feedback-relay',
     };
+  }
+
+  private async request(operation: 'create' | 'search', url: string, init: RequestInit): Promise<Response> {
+    try {
+      return await this.fetchImpl(url, init);
+    } catch {
+      throw new GitHubApiError(operation, null);
+    }
   }
 }
 

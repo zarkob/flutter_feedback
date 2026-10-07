@@ -6,7 +6,7 @@
  * last case never counts as a send.
  */
 
-import { buildIssueBody, buildIssueTitle, type Backlog } from './backlog.ts';
+import { buildIssueBody, buildIssueTitle, GitHubApiError, type Backlog, type IssueRef } from './backlog.ts';
 import { hasTesterAccess, sha256Hex, type DestinationMap, type ProductBundle } from './destinations.ts';
 import { imageHostFor, type ImageHost } from './images.ts';
 import { readReportRequest, ValidationError, type ReportRequest } from './report.ts';
@@ -74,6 +74,25 @@ export function createRelay(deps: RelayDeps): RelayHandler {
       log('duplicate', { product: bundle.product_id, report: report.report_id });
       return json({ ok: true, status: 'duplicate', issue_url: existing.issue_url, ...(existing.note ? { note: existing.note } : {}) }, 200);
     }
+    let note: string | undefined = (existing?.status === 'preflight_unknown' ? existing.note : undefined) ?? (report.screenshot_b64 && !bundle.image_api_key
+      ? IMAGE_NOT_STORED_NOTE
+      : undefined);
+    let preflightSearchDone = false;
+    if (existing?.status === 'preflight_unknown') {
+      const preflight = await safeFind(deps.backlog, bundle, report.report_id, log);
+      if (preflight.failed) {
+        log('issue_search_unknown', { product: bundle.product_id, report: report.report_id });
+        return json({ ok: false, error: 'Issue search did not answer. The report may exist.', delivery: 'unknown', ...(note ? { note } : {}) }, 502);
+      }
+      if (preflight.issue) {
+        const record: DeliveryRecord = { ...existing, status: 'created', issue_url: preflight.issue.url, updated_at: stamp() };
+        if (!(await saveDeliveryRecord(record, 'after_preflight_search'))) {
+          return json({ ok: false, error: 'Check delivery before retrying.', delivery: 'unknown', ...(note ? { note } : {}) }, 502);
+        }
+        return json({ ok: true, status: 'duplicate', issue_url: preflight.issue.url, ...(note ? { note } : {}) }, 200);
+      }
+      preflightSearchDone = true;
+    }
     if (existing && (existing.status === 'pending' || existing.status === 'unknown')) {
       // A claim exists but delivery is not proven. Look before any new issue.
       const resolved = await resolveDelivery(bundle, report.report_id, existing);
@@ -89,29 +108,58 @@ export function createRelay(deps: RelayDeps): RelayHandler {
       report_id: report.report_id,
       product_id: bundle.product_id,
       status: 'pending',
+      ...(note ? { note } : {}),
       updated_at: stamp(),
     };
+    const firstSearch = preflightSearchDone
+      ? { issue: null, failed: false }
+      : await safeFind(deps.backlog, bundle, report.report_id, log);
+    if (firstSearch.failed) {
+      const preflightRecord: DeliveryRecord = { ...claim, status: 'preflight_unknown' };
+      if (existing) {
+        if (!(await saveDeliveryRecord(preflightRecord, 'before_create_search'))) {
+          return json({ ok: false, error: 'Issue search did not answer. Check delivery before retrying.', delivery: 'unknown', ...(note ? { note } : {}) }, 502);
+        }
+      } else if (!(await deps.store.claim(preflightRecord))) {
+        const taken = await deps.store.get(report.report_id);
+        if (taken?.issue_url) {
+          return json({ ok: true, status: 'duplicate', issue_url: taken.issue_url, ...(taken.note ? { note: taken.note } : {}) }, 200);
+        }
+      }
+      log('issue_search_unknown', { product: bundle.product_id, report: report.report_id });
+      return json({ ok: false, error: 'Issue search did not answer. The report may exist.', delivery: 'unknown', ...(note ? { note } : {}) }, 502);
+    }
+    const alreadyFiled = firstSearch.issue;
+    if (alreadyFiled) {
+      const record: DeliveryRecord = { ...claim, status: 'created', issue_url: alreadyFiled.url, updated_at: stamp() };
+      if (existing) {
+        if (!(await saveDeliveryRecord(record, 'after_preflight_search'))) {
+          return json({ ok: false, error: 'Check delivery before retrying.', delivery: 'unknown', ...(note ? { note } : {}) }, 502);
+        }
+      } else if (!(await deps.store.claim(record))) {
+        const taken = await deps.store.get(report.report_id);
+        if (taken?.issue_url) {
+          return json({ ok: true, status: 'duplicate', issue_url: taken.issue_url, ...(taken.note ? { note: taken.note } : {}) }, 200);
+        }
+        return json({ ok: true, status: 'unknown', error: 'Another send of this report is running.', ...(note ? { note } : {}) }, 200);
+      }
+      log('duplicate_after_search', { product: bundle.product_id, report: report.report_id });
+      return json({ ok: true, status: 'duplicate', issue_url: alreadyFiled.url, ...(note ? { note } : {}) }, 200);
+    }
+
     if (existing) {
-      await deps.store.put(claim);
+      if (!(await saveDeliveryRecord(claim, 'before_create'))) {
+        return json({ ok: false, error: 'Check delivery before retrying.', delivery: 'unknown', ...(note ? { note } : {}) }, 502);
+      }
     } else if (!(await deps.store.claim(claim))) {
       const taken = await deps.store.get(report.report_id);
       if (taken?.issue_url) {
         return json({ ok: true, status: 'duplicate', issue_url: taken.issue_url, ...(taken.note ? { note: taken.note } : {}) }, 200);
       }
-      return json({ ok: true, status: 'unknown', error: 'Another send of this report is running.' }, 200);
-    }
-
-    // Look before creating: the same report must not open two issues.
-    const alreadyFiled = await safeFind(deps.backlog, bundle, report.report_id);
-    if (alreadyFiled) {
-      const record: DeliveryRecord = { ...claim, status: 'created', issue_url: alreadyFiled.url, updated_at: stamp() };
-      await deps.store.put(record);
-      log('duplicate_after_search', { product: bundle.product_id, report: report.report_id });
-      return json({ ok: true, status: 'duplicate', issue_url: alreadyFiled.url }, 200);
+      return json({ ok: true, status: 'unknown', error: 'Another send of this report is running.', ...(note ? { note } : {}) }, 200);
     }
 
     let imageUrl: string | null = null;
-    let note: string | undefined;
     if (report.screenshot_b64) {
       const host = imageHostFor(bundle, deps.imgbb, deps.disabledImages);
       try {
@@ -124,33 +172,52 @@ export function createRelay(deps: RelayDeps): RelayHandler {
           return json({ ok: false, error: 'Screenshot upload failed.', delivery: 'failed' }, 502);
         }
         note = IMAGE_NOT_STORED_NOTE;
-        await deps.store.put({ ...claim, note, updated_at: stamp() });
       }
     }
 
+    let issue: IssueRef;
     try {
-      const issue = await deps.backlog.createIssue(bundle, {
+      issue = await deps.backlog.createIssue(bundle, {
         reportId: report.report_id,
         title: buildIssueTitle(report),
         body: buildIssueBody(report, imageUrl),
       });
-      const record: DeliveryRecord = { ...claim, status: 'created', issue_url: issue.url, note, updated_at: stamp() };
-      await deps.store.put(record);
-      log('created', { product: bundle.product_id, report: report.report_id });
-      return json({ ok: true, status: 'created', issue_url: issue.url, ...(note ? { note } : {}) }, 201);
-    } catch {
+    } catch (error) {
+      logGitHubFailure(log, 'create', error, bundle.product_id, report.report_id);
       // The issue may exist even when the answer was lost. Look again.
-      const recovered = await safeFind(deps.backlog, bundle, report.report_id);
+      const recoverySearch = await safeFind(deps.backlog, bundle, report.report_id, log);
+      const recovered = recoverySearch.issue;
       if (recovered) {
         const record: DeliveryRecord = { ...claim, status: 'created', issue_url: recovered.url, note, updated_at: stamp() };
-        await deps.store.put(record);
+        if (!(await saveDeliveryRecord(record, 'after_create_recovery'))) {
+          return json({ ok: false, error: 'The issue may exist. Check delivery before retrying.', delivery: 'unknown', ...(note ? { note } : {}) }, 502);
+        }
         log('created_after_error', { product: bundle.product_id, report: report.report_id });
         return json({ ok: true, status: 'created', issue_url: recovered.url, ...(note ? { note } : {}) }, 201);
       }
       const unknown: DeliveryRecord = { ...claim, status: 'unknown', note, updated_at: stamp() };
-      await deps.store.put(unknown);
+      if (!(await saveDeliveryRecord(unknown, 'after_create_unknown'))) {
+        return json({ ok: false, error: 'Issue creation did not answer. Check delivery before retrying.', delivery: 'unknown', ...(note ? { note } : {}) }, 502);
+      }
       log('issue_unknown', { product: bundle.product_id, report: report.report_id });
       return json({ ok: false, error: 'Issue creation did not answer. The report may exist.', delivery: 'unknown' }, 502);
+    }
+
+    const record: DeliveryRecord = { ...claim, status: 'created', issue_url: issue.url, note, updated_at: stamp() };
+    if (!(await saveDeliveryRecord(record, 'after_create'))) {
+      return json({ ok: false, error: 'The issue may exist. Check delivery before retrying.', delivery: 'unknown', ...(note ? { note } : {}) }, 502);
+    }
+    log('created', { product: bundle.product_id, report: report.report_id });
+    return json({ ok: true, status: 'created', issue_url: issue.url, ...(note ? { note } : {}) }, 201);
+  }
+
+  async function saveDeliveryRecord(record: DeliveryRecord, stage: string): Promise<boolean> {
+    try {
+      await deps.store.put(record);
+      return true;
+    } catch {
+      log('delivery_store_failed', { product: record.product_id, report: record.report_id, stage });
+      return false;
     }
   }
 
@@ -170,6 +237,20 @@ export function createRelay(deps: RelayDeps): RelayHandler {
     if (!(await hasTesterAccess(bundle, token))) {
       return json({ ok: false, error: 'Tester access denied.' }, 403);
     }
+    if (record.status === 'preflight_unknown') {
+      const search = await safeFind(deps.backlog, bundle, reportId, log);
+      if (search.failed) {
+        return json({ ok: true, status: 'unknown', error: 'The relay cannot prove what happened to this report yet.', ...(record.note ? { note: record.note } : {}) }, 200);
+      }
+      if (!search.issue) {
+        return json({ ok: true, status: 'not_found', ...(record.note ? { note: record.note } : {}) }, 200);
+      }
+      const confirmed: DeliveryRecord = { ...record, status: 'created', issue_url: search.issue.url, updated_at: stamp() };
+      if (!(await saveDeliveryRecord(confirmed, 'after_preflight_check'))) {
+        return json({ ok: true, status: 'unknown', error: 'The relay could not save the delivery result. Check again before retrying.', ...(record.note ? { note: record.note } : {}) }, 200);
+      }
+      return json({ ok: true, status: 'created', issue_url: search.issue.url, ...(record.note ? { note: record.note } : {}) }, 200);
+    }
     if (record.status === 'created' && record.issue_url) {
       return json({ ok: true, status: 'created', issue_url: record.issue_url, ...(record.note ? { note: record.note } : {}) }, 200);
     }
@@ -185,7 +266,8 @@ export function createRelay(deps: RelayDeps): RelayHandler {
   }
 
   async function resolveDelivery(bundle: ProductBundle, reportId: string, record: DeliveryRecord): Promise<DeliveryRecord> {
-    const found = await safeFind(deps.backlog, bundle, reportId);
+    const search = await safeFind(deps.backlog, bundle, reportId, log);
+    const found = search.issue;
     const note = record.note === IMAGE_NOT_STORED_NOTE ? record.note : undefined;
     if (found) {
       return { ...record, status: 'created', issue_url: found.url, note, updated_at: stamp() };
@@ -224,11 +306,33 @@ async function hasAnyAccess(destinations: DestinationMap, token: string | null):
   return false;
 }
 
-async function safeFind(backlog: Backlog, bundle: ProductBundle, reportId: string) {
+interface SearchResult {
+  issue: IssueRef | null;
+  failed: boolean;
+}
+
+async function safeFind(backlog: Backlog, bundle: ProductBundle, reportId: string, log: RelayDeps['log']): Promise<SearchResult> {
   try {
-    return await backlog.findByReportId(bundle, reportId);
-  } catch {
-    return null;
+    return { issue: await backlog.findByReportId(bundle, reportId), failed: false };
+  } catch (error) {
+    logGitHubFailure(log ?? (() => {}), 'search', error, bundle.product_id, reportId);
+    return { issue: null, failed: true };
+  }
+}
+
+function logGitHubFailure(
+  log: NonNullable<RelayDeps['log']>,
+  operation: 'create' | 'search',
+  error: unknown,
+  product: string,
+  report: string,
+): void {
+  if (error instanceof GitHubApiError && error.operation === operation) {
+    log(`github_${operation}_failed`, {
+      product,
+      report,
+      http_status: error.httpStatus === null ? 'unknown' : String(error.httpStatus),
+    });
   }
 }
 

@@ -7,7 +7,7 @@
  */
 
 /** The state of one report at the relay. */
-export type DeliveryStatus = 'pending' | 'created' | 'unknown' | 'failed';
+export type DeliveryStatus = 'pending' | 'preflight_unknown' | 'created' | 'unknown' | 'failed';
 
 /** What the relay knows about one report id. */
 export interface DeliveryRecord {

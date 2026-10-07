@@ -35,6 +35,7 @@ export class FakeBacklog implements Backlog {
   readonly issues: FakeIssue[] = [];
   createMode: CreateMode = 'ok';
   searchMode: SearchMode = 'ok';
+  searchModes: SearchMode[] = [];
   createCalls = 0;
 
   async createIssue(bundle: ProductBundle, issue: IssueRequest): Promise<IssueRef> {
@@ -52,10 +53,11 @@ export class FakeBacklog implements Backlog {
   }
 
   async findByReportId(_bundle: ProductBundle, reportId: string): Promise<IssueRef | null> {
-    if (this.searchMode === 'error') {
+    const mode = this.searchModes.shift() ?? this.searchMode;
+    if (mode === 'error') {
       throw new Error('The fake search is down.');
     }
-    if (this.searchMode === 'lagging') {
+    if (mode === 'lagging') {
       return null;
     }
     const found = this.issues.find((issue) => issue.body.includes(`avensora-report-id: ${reportId}`));
